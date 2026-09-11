@@ -188,6 +188,7 @@ public class ConfigManager {
         registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
         // removed: testModule, armorStatus, fpsBoost (not implemented)
     }
 

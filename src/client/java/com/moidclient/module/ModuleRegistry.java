@@ -5,6 +5,7 @@ import com.moidclient.hud.cps.CpsHud;
 import com.moidclient.hud.fps.FpsHud;
 import com.moidclient.hud.keystrokes.KeystrokesHud;
 import com.moidclient.hud.ping.PingHud;
+import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
 import com.moidclient.visuals.fullbright.FullbrightManager;
 
@@ -25,7 +26,8 @@ public final class ModuleRegistry {
             CpsHud.definition(),
             KeystrokesHud.definition(),
             FullbrightManager.definition(),
-            BlockOutlineRenderer.definition()
+            BlockOutlineRenderer.definition(),
+            PerspectiveSkipManager.definition()
         );
     }
 

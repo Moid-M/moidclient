@@ -4,6 +4,7 @@ import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudManager;
 import com.moidclient.hud.cps.CpsHud;
 import com.moidclient.module.ModuleRegistry;
+import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.network.NetworkPackets;
 import com.moidclient.server.ServerManager;
 import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
@@ -72,6 +73,10 @@ public class ClientMod implements ClientModInitializer {
 
         // Also register Right Shift as alternative if user prefers - use event to listen both
         // GLFW_RIGHT_SHIFT = 344, but InputUtil handles it
+
+        ClientTickEvents.START_CLIENT_TICK.register(client -> {
+            try { PerspectiveSkipManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] PerspectiveSkip tick failed", e); }
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openGuiKey.consumeClick()) {

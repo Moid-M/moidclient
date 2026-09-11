@@ -47,6 +47,7 @@ drift into the prose sections above.
 | Keystrokes | HUD | Displays currently pressed movement/action keys | ✅ |
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
 | Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
+| Perspective Skip | Utility | F5 jumps first-person straight to front-facing, skipping third-person-back | ✅ |
 
 **Planned / in progress:**
 
@@ -54,7 +55,6 @@ drift into the prose sections above.
 |---|---|---|
 | Custom Hitboxes | Visuals | Configurable size/color entity hitboxes |
 | Crosshair Customization | HUD | Custom crosshair styles, colors, sizes |
-| Double-F5 Perspective Skip | Utility | Skips the third-person-back view when toggling perspective, jumping straight from first-person to front-facing third-person (normally two separate F5 presses) |
 
 ## How Moid Compares
 
