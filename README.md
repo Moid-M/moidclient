@@ -46,12 +46,12 @@ drift into the prose sections above.
 | CPS Counter | HUD | Displays clicks per second | ✅ |
 | Keystrokes | HUD | Displays currently pressed movement/action keys | ✅ |
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
+| Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
 
 **Planned / in progress:**
 
 | Module | Category | Description |
 |---|---|---|
-| Block Outline | Visuals | Configurable outline on targeted block |
 | Custom Hitboxes | Visuals | Configurable size/color entity hitboxes |
 | Crosshair Customization | HUD | Custom crosshair styles, colors, sizes |
 | Double-F5 Perspective Skip | Utility | Skips the third-person-back view when toggling perspective, jumping straight from first-person to front-facing third-person (normally two separate F5 presses) |
@@ -92,7 +92,7 @@ Built jar will be in `build/libs/Moid-Client-v1.0.0.jar`.
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep new modules consistent with the existing module structure (see `com.moidclient.hud.*` / `visuals/*` + `ConfigManager.ModuleConfig`).
+Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer and `ConfigManager.ModuleConfig` fields — the dashboard cards and `/api/modules` pick it up automatically, no frontend changes needed.
 
 ## License
 

@@ -1,6 +1,8 @@
 package com.moidclient.hud.ping;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.module.ModuleDef;
+import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -13,6 +15,16 @@ import org.joml.Matrix3x2fStack;
  */
 public final class PingHud {
     private PingHud() {}
+
+    public static ModuleDef definition() {
+        return new ModuleDef("ping", "Ping Display", "Server latency in ms.", "hud", true,
+            ModuleOption.list(
+                ModuleOption.text("format", "Format", "Ping: {ping} ms"),
+                ModuleOption.bool("shadow", "Text shadow"),
+                ModuleOption.scale(),
+                ModuleOption.opacity()
+            ));
+    }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {
         if (config == null) return;

@@ -179,6 +179,7 @@ public class ConfigManager {
         registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
         registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
         // removed: testModule, armorStatus, fpsBoost (not implemented)
     }
 
@@ -325,10 +326,16 @@ public class ConfigManager {
         if (data.has("backgroundOpacity")) cfg.backgroundOpacity = data.get("backgroundOpacity").getAsDouble();
         if (data.has("color") && !data.get("color").isJsonNull()) cfg.color = data.get("color").getAsString();
         if (data.has("background")) cfg.background = data.get("background").getAsBoolean();
-        if (data.has("backgroundColor") && !data.get("backgroundColor").isJsonNull()) cfg.backgroundColor = data.get("backgroundColor").getAsString();
+        if (data.has("backgroundColor") && !data.get("backgroundColor").isJsonNull()) {
+            String c = data.get("backgroundColor").getAsString();
+            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) cfg.backgroundColor = c;
+        }
         if (data.has("textColor")) {
             if (data.get("textColor").isJsonNull()) cfg.textColor = null;
-            else cfg.textColor = data.get("textColor").getAsString();
+            else {
+                String c = data.get("textColor").getAsString();
+                if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.textColor = c;
+            }
         }
         if (data.has("format") && !data.get("format").isJsonNull()) cfg.format = data.get("format").getAsString();
         if (data.has("shadow")) cfg.shadow = data.get("shadow").getAsBoolean();
@@ -352,7 +359,10 @@ public class ConfigManager {
         if (data.has("keystrokesShowCps")) cfg.keystrokesShowCps = data.get("keystrokesShowCps").getAsBoolean();
         if (data.has("keystrokesGap")) cfg.keystrokesGap = data.get("keystrokesGap").getAsInt();
         if (data.has("keystrokesOutline")) cfg.keystrokesOutline = data.get("keystrokesOutline").getAsBoolean();
-        if (data.has("keystrokesPressedColor") && !data.get("keystrokesPressedColor").isJsonNull()) cfg.keystrokesPressedColor = data.get("keystrokesPressedColor").getAsString();
+        if (data.has("keystrokesPressedColor")) {
+            if (data.get("keystrokesPressedColor").isJsonNull()) cfg.keystrokesPressedColor = null;
+            else cfg.keystrokesPressedColor = data.get("keystrokesPressedColor").getAsString();
+        }
         if (data.has("fullbrightGamma")) cfg.fullbrightGamma = data.get("fullbrightGamma").getAsDouble();
         save();
     }

@@ -1,6 +1,8 @@
 package com.moidclient.hud.fps;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.module.ModuleDef;
+import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -16,6 +18,18 @@ public final class FpsHud {
     private static long lastFpsUpdate = 0;
 
     private FpsHud() {}
+
+    public static ModuleDef definition() {
+        return new ModuleDef("fpsCounter", "FPS Counter", "Shows current frames per second.", "hud", true,
+            ModuleOption.list(
+                ModuleOption.text("format", "Format", "FPS: {fps}"),
+                ModuleOption.bool("shadow", "Text shadow"),
+                ModuleOption.select("fpsMode", "Update speed", java.util.List.of("stable", "fast")),
+                ModuleOption.bool("fpsDynamicColor", "Dynamic color (red-green)"),
+                ModuleOption.scale(),
+                ModuleOption.opacity()
+            ));
+    }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {
         if (config == null) return;

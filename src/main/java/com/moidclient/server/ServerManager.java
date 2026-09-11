@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.function.Supplier;
 
 /**
  * Netty/Javalin HTTP & WebSocket server with dynamic port binding.
@@ -21,12 +22,18 @@ public class ServerManager {
 
     private final ConfigManager config;
     private final NetworkPackets network;
+    private final Supplier<com.google.gson.JsonElement> moduleDefs;
     private Javalin app;
     private int activePort = -1;
 
     public ServerManager(ConfigManager config, NetworkPackets network) {
+        this(config, network, null);
+    }
+
+    public ServerManager(ConfigManager config, NetworkPackets network, Supplier<com.google.gson.JsonElement> moduleDefs) {
         this.config = config;
         this.network = network;
+        this.moduleDefs = moduleDefs;
     }
 
     public int getActivePort() {
@@ -84,7 +91,18 @@ public class ServerManager {
             ws.onConnect(ctx -> network.onConnect(ctx));
             ws.onClose(ctx -> network.onClose(ctx));
             ws.onMessage(ctx -> network.onMessage(ctx, ctx.message()));
-        }).get("/api/config", ctx -> ctx.json(config.toJson()))
+        })          .get("/api/config", ctx -> ctx.json(config.toJson()))
+          .get("/api/modules", ctx -> {
+              if (moduleDefs != null) {
+                  try {
+                      ctx.json(moduleDefs.get());
+                      return;
+                  } catch (Exception e) {
+                      LOGGER.warn("[MoidClient] Failed to serialize module defs", e);
+                  }
+              }
+              ctx.status(503).result("[]");
+          })
           .get("/api/port", ctx -> ctx.result(String.valueOf(port)))
           .get("/api/health", ctx -> ctx.json(java.util.Map.of("status", "ok", "port", port)))
           .post("/api/log", ctx -> {

@@ -3,8 +3,10 @@ package com.moidclient;
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudManager;
 import com.moidclient.hud.cps.CpsHud;
+import com.moidclient.module.ModuleRegistry;
 import com.moidclient.network.NetworkPackets;
 import com.moidclient.server.ServerManager;
+import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
 import com.moidclient.visuals.fullbright.FullbrightManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -48,9 +50,10 @@ public class ClientMod implements ClientModInitializer {
         networkPackets = new NetworkPackets(configManager);
         // 1b) HUD (ping display etc) - register before server
         try { HudManager.init(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init HUD", e); }
+        try { BlockOutlineRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Block Outline", e); }
 
         // 2) Server (dynamic port binding + asset serving + WS)
-        serverManager = new ServerManager(configManager, networkPackets);
+        serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson);
         try {
             serverManager.start();
         } catch (Exception e) {

@@ -1,6 +1,8 @@
 package com.moidclient.visuals.fullbright;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.module.ModuleDef;
+import com.moidclient.module.ModuleOption;
 import net.minecraft.client.Minecraft;
 import java.lang.reflect.Field;
 
@@ -12,6 +14,13 @@ public final class FullbrightManager {
     private static double originalGamma = -1;
 
     private FullbrightManager() {}
+
+    public static ModuleDef definition() {
+        return new ModuleDef("fullbright", "Fullbright", "Gamma boost for dark areas - no overlay.", "visuals", false,
+            ModuleOption.list(
+                ModuleOption.slider("fullbrightGamma", "Brightness", 1, 15, 0.5)
+            ));
+    }
 
     public static void onTick(ConfigManager config) {
         try {

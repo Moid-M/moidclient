@@ -14,14 +14,47 @@ const ICONS = {
   cpsCounter:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="16" rx="3"/><path d="M12 7v4"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>`,
   keystrokes:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M8 11h.01M12 11h.01M16 11h.01M8 15h8"/></svg>`,
   fullbright:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`,
+  blockOutline: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 11L4 6.5M12 11l8-4.5M12 11v9"/></svg>`,
 };
-const MODULES_META = {
-  ping:         { name: 'Ping Display', desc: 'Server latency in ms.', cat: 'hud' },
-  fpsCounter:   { name: 'FPS Counter', desc: 'Shows current frames per second.', cat: 'hud' },
-  cpsCounter:   { name: 'CPS Counter', desc: 'Clicks per second - left | right with burst fire.', cat: 'hud' },
-  keystrokes:   { name: 'Keystrokes', desc: 'WASD + mouse overlay.', cat: 'hud' },
-  fullbright:   { name: 'Fullbright', desc: 'Gamma boost for dark areas - no overlay.', cat: 'visuals' },
-};
+const FALLBACK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>`;
+function iconFor(id){ return ICONS[id] || FALLBACK_ICON; }
+// Module definitions come from the game via GET /api/modules (single source of
+// truth = each module's definition() in Java). Rendered generically below.
+let MODULES_META = {};
+let MODULE_ORDER = [];
+let defsLoaded = false;
+async function loadModuleDefs(){
+  try{
+    const res = await fetch('/api/modules');
+    if(!res.ok) throw new Error('http '+res.status);
+    const defs = await res.json();
+    if(!Array.isArray(defs) || !defs.length) throw new Error('empty defs');
+    const meta = {}, order = [];
+    for(const d of defs){
+      if(!d || !d.id) continue;
+      meta[d.id] = {
+        name: d.name || d.id,
+        desc: d.description || '',
+        cat: d.category || 'hud',
+        overlay: !!d.overlay,
+        options: Array.isArray(d.options) ? d.options : [],
+      };
+      order.push(d.id);
+    }
+    if(!order.length) throw new Error('no usable defs');
+    MODULES_META = meta;
+    MODULE_ORDER = order;
+    defsLoaded = true;
+    return true;
+  }catch(e){
+    console.error('[MoidClient] module defs load failed', e);
+    defsLoaded = false;
+    return false;
+  }
+}
+function defsNoticeHtml(){
+  return `<div class="card p-5 text-xs leading-relaxed" style="color:var(--text-muted)">Waiting for Minecraft — start the game with Moid Client installed, then open this dashboard. <button class="underline" style="color:var(--accent)" onclick="location.reload()">Retry</button></div>`;
+}
 let ws=null, accent='#8B5CF6', config={accentColor:accent, modules:{}};
 let focusedId=null, hasInitialRendered=false, isDraggingSlider=false;
 let isDraggingHud=false;
@@ -231,10 +264,10 @@ function syncEditorItems(){
   const outer=document.querySelector('#hudPreviewOuter');
   if(!outer) return;
   outer.querySelectorAll('.hud-preview-item').forEach(e=>e.remove());
-  const enabledIds=Object.keys(MODULES_META).filter(id=>{
+  const enabledIds=MODULE_ORDER.filter(id=>{
     const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.cat==='hud';
   });
-  const hudKeys=Object.keys(MODULES_META).filter(k=>MODULES_META[k].cat==='hud');
+  const hudKeys=MODULE_ORDER.filter(k=>MODULES_META[k].cat==='hud');
   const idsToShow = enabledIds.length ? enabledIds : hudKeys.slice(0,2);
   const rect=outer.getBoundingClientRect();
   const sx= rect.width / windowSize.scaledWidth;
@@ -396,7 +429,8 @@ function setupEditorDrag(){
 }
 function setupModulePicker(id, field, hex, scopeCard){
   const isBg = field==='backgroundColor';
-  const pickerSel = isBg ? `[data-bg-picker="${id}"]` : `[data-text-picker="${id}"]`;
+  const ck = `${id}:${field}`;
+  const pickerSel = `[data-color-picker="${ck}"]`;
   const picker = (scopeCard && scopeCard.querySelector(pickerSel)) || document.querySelector(pickerSel);
   if(!picker) return;
   picker.classList.add('open');
@@ -416,8 +450,8 @@ function setupModulePicker(id, field, hex, scopeCard){
   }
   picker._alpha=currentAlphaVal();
   function paintAlphaLocal(){
-    const aBar=picker.querySelector(isBg ? `[data-bg-alpha="${id}"]` : `[data-text-alpha="${id}"]`);
-    const aCur=picker.querySelector(isBg ? `[data-bg-alphacur="${id}"]` : `[data-text-alphacur="${id}"]`);
+    const aBar=picker.querySelector(`[data-picker-alpha="${ck}"]`);
+    const aCur=picker.querySelector(`[data-picker-alphacur="${ck}"]`);
     if(!aBar) return;
     const curHex=hsvToHex(picker._hsv.h, picker._hsv.s, picker._hsv.v);
     const rgb=hexToRgbLocal(curHex);
@@ -425,28 +459,28 @@ function setupModulePicker(id, field, hex, scopeCard){
     if(aCur) aCur.style.top=((1-picker._alpha)*100)+'%';
   }
   if(picker.dataset.inited){
-    const sv2 = picker.querySelector(isBg ? `[data-bg-sv="${id}"]` : `[data-text-sv="${id}"]`);
-    const svCur2 = picker.querySelector(isBg ? `[data-bg-svcur="${id}"]` : `[data-text-svcur="${id}"]`);
-    const hueCur2 = picker.querySelector(isBg ? `[data-bg-huecur="${id}"]` : `[data-text-huecur="${id}"]`);
+    const sv2 = picker.querySelector(`[data-picker-sv="${ck}"]`);
+    const svCur2 = picker.querySelector(`[data-picker-svcur="${ck}"]`);
+    const hueCur2 = picker.querySelector(`[data-picker-huecur="${ck}"]`);
     if(sv2) sv2.style.background=`hsl(${hsv.h} 100% 50%)`;
     if(svCur2){ svCur2.style.left=(hsv.s*100)+'%'; svCur2.style.top=((1-hsv.v)*100)+'%'; }
     if(hueCur2) hueCur2.style.top=(hsv.h/360*100)+'%';
     paintAlphaLocal();
     const cardEl = picker.closest('.card') || scopeCard || document;
     const inp2=(cardEl.querySelector ? cardEl.querySelector(`input[data-field="${field}"][data-id="${id}"]`) : null) || document.querySelector(`input[data-field="${field}"][data-id="${id}"]`);
-    const preview2=(cardEl.querySelector ? cardEl.querySelector(isBg ? `[data-bg-preview="${id}"]` : `[data-text-preview="${id}"]`) : null) || document.querySelector(isBg ? `[data-bg-preview="${id}"]` : `[data-text-preview="${id}"]`);
+    const preview2=(cardEl.querySelector ? cardEl.querySelector(`[data-color-preview="${ck}"]`) : null) || document.querySelector(`[data-color-preview="${ck}"]`);
     if(inp2) inp2.value=hex||'';
     if(preview2){ if(field==='textColor' && !hex) preview2.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; else preview2.style.background=hex||'#1A1B20'; }
     return;
   }
   picker.dataset.inited='1';
   picker._hsv = hsv;
-  const sv = picker.querySelector(isBg ? `[data-bg-sv="${id}"]` : `[data-text-sv="${id}"]`);
-  const hue = picker.querySelector(isBg ? `[data-bg-hue="${id}"]` : `[data-text-hue="${id}"]`);
-  const svCur = picker.querySelector(isBg ? `[data-bg-svcur="${id}"]` : `[data-text-svcur="${id}"]`);
-  const hueCur = picker.querySelector(isBg ? `[data-bg-huecur="${id}"]` : `[data-text-huecur="${id}"]`);
-  const alphaBar = picker.querySelector(isBg ? `[data-bg-alpha="${id}"]` : `[data-text-alpha="${id}"]`);
-  const alphaCur = picker.querySelector(isBg ? `[data-bg-alphacur="${id}"]` : `[data-text-alphacur="${id}"]`);
+  const sv = picker.querySelector(`[data-picker-sv="${ck}"]`);
+  const hue = picker.querySelector(`[data-picker-hue="${ck}"]`);
+  const svCur = picker.querySelector(`[data-picker-svcur="${ck}"]`);
+  const hueCur = picker.querySelector(`[data-picker-huecur="${ck}"]`);
+  const alphaBar = picker.querySelector(`[data-picker-alpha="${ck}"]`);
+  const alphaCur = picker.querySelector(`[data-picker-alphacur="${ck}"]`);
   if(!sv||!hue) return;
 
   function syncAlphaSliderUI(a){
@@ -454,7 +488,7 @@ function setupModulePicker(id, field, hex, scopeCard){
     if(isBg) return; // bg has no slider in card — alpha bar is the control
     const opInp=(cardElx.querySelector?cardElx.querySelector(`input[data-field="opacity"][data-id="${id}"]`):null);
     if(opInp){ opInp.value=a; updateSliderFill(opInp); }
-    const lbl=(cardElx.querySelector?cardElx.querySelector(`[data-opacity-label="${id}"]`):null);
+    const lbl=(cardElx.querySelector?cardElx.querySelector(`[data-opt-label="${id}:opacity"]`):null);
     if(lbl) lbl.textContent=parseFloat(a).toFixed(2);
   }
   
@@ -465,8 +499,8 @@ function setupModulePicker(id, field, hex, scopeCard){
     paintAlphaLocal();
     const cardEl = picker.closest('.card') || scopeCard || document;
     const inp=(cardEl.querySelector ? cardEl.querySelector(`input[data-field="${field}"][data-id="${id}"]`) : null) || document.querySelector(`input[data-field="${field}"][data-id="${id}"]`);
-    const preview=(cardEl.querySelector ? cardEl.querySelector(isBg ? `[data-bg-preview="${id}"]` : `[data-text-preview="${id}"]`) : null) || document.querySelector(isBg ? `[data-bg-preview="${id}"]` : `[data-text-preview="${id}"]`);
-    if(inp) { inp.value=h; if(preview){ if(field==='textColor' && !h) preview.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; else preview.style.background=h; } }
+    const preview=(cardEl.querySelector ? cardEl.querySelector(`[data-color-preview="${ck}"]`) : null) || document.querySelector(`[data-color-preview="${ck}"]`);
+    if(inp) { inp.value=h; if(preview){ if(!h) preview.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; else preview.style.background=h; } }
   }
   apply(hex, hsv);
   paintAlphaLocal();
@@ -546,11 +580,59 @@ function updateSliderFill(el){
   const pct=((val-min)/(max-min))*100;
   el.style.background=`linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border) ${pct}%, var(--border) 100%)`;
 }
+function escAttr(s){ return String(s ?? '').replace(/"/g, '&quot;'); }
+const PICKER_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.31 0z"/><circle cx="12" cy="12" r="2.2"/></svg>`;
+function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withAlpha){
+  const ck = `${id}:${key}`;
+  const dotBg = cur || (key === 'backgroundColor' ? '#1A1B20' : 'transparent');
+  const checker = (!cur) ? 'background: repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px' : '';
+  return `<div class="space-y-2">
+      <span class="text-xs font-medium" style="color:var(--text-muted)">${label}${hint ? ` <span class="text-[10px]">${hint}</span>` : ''}</span>
+      <div class="flex gap-2 items-center">
+        <div class="w-6 h-6 rounded-full border shrink-0" style="background:${dotBg};border-color:var(--border); ${checker}" data-color-preview="${ck}"></div>
+        <input data-field="${key}" data-id="${id}" value="${escAttr(cur)}" placeholder="${escAttr(placeholder || '#RRGGBB')}" spellcheck="false" class="field-input flex-1 px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
+        ${nullable ? `<button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=${key}]').value=''; this.closest('[data-id]').querySelector('[data-field=${key}]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>` : ''}
+        <button class="picker-icon-btn" data-color-picker-toggle="${ck}" title="Color picker">${PICKER_ICON_SVG}</button>
+      </div>
+      <div class="picker-wrap" data-color-picker="${ck}">
+        <div class="sv-box" data-picker-sv="${ck}" style="width:140px;height:90px"><div class="sv-cursor" data-picker-svcur="${ck}"></div></div>
+        <div class="hue-bar" data-picker-hue="${ck}" style="height:90px"><div class="hue-cursor" data-picker-huecur="${ck}"></div></div>
+        ${withAlpha ? `<div class="alpha-bar" data-picker-alpha="${ck}" style="height:90px" title="Transparency"><div class="alpha-cursor" data-picker-alphacur="${ck}"></div></div>` : ''}
+      </div>
+    </div>`;
+}
+function optionHtml(id, opt, data){
+  const key = opt.key, type = opt.type || 'text', label = opt.label || key;
+  const hint = opt.hint ? ` <span class="text-[10px]">${opt.hint}</span>` : '';
+  const val = data[key];
+  if(type === 'boolean'){
+    return `<label class="flex items-center gap-2 text-xs" style="color:var(--text-muted)"><input type="checkbox" ${val ? 'checked' : ''} data-field="${key}" data-id="${id}" class="rounded accent-[var(--accent)]"> ${label}</label>`;
+  }
+  if(type === 'slider'){
+    const min = opt.min ?? 0, max = opt.max ?? 1, step = opt.step ?? 0.01;
+    const v = (val ?? min);
+    const disp = (key === 'scale') ? Number(v).toFixed(2) + 'x' : Number(v).toFixed(2);
+    return `<label class="text-xs flex flex-col gap-2" style="color:var(--text-muted)">${label} <span data-opt-label="${id}:${key}" style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${disp}</span> <input data-field="${key}" data-id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${v}" class="range"/></label>`;
+  }
+  if(type === 'select'){
+    const opts = (opt.options || []).map(o => `<option value="${escAttr(o)}" ${String(val) === String(o) ? 'selected' : ''}>${escAttr(o)}</option>`).join('');
+    return `<label class="text-xs flex flex-col gap-1.5" style="color:var(--text-muted)">${label}${hint}<select data-field="${key}" data-id="${id}" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs" style="background:var(--bg);border-color:var(--border);color:var(--text-bright)">${opts}</select></label>`;
+  }
+  if(type === 'color'){
+    const withAlpha = (key === 'backgroundColor' || key === 'textColor');
+    return colorOptionHtml(id, key, label, opt.hint, val || '', opt.placeholder, !!opt.nullable, withAlpha);
+  }
+  return `<label class="text-xs flex flex-col gap-1.5" style="color:var(--text-muted)">${label}${hint}
+      <input data-field="${key}" data-id="${id}" value="${escAttr(val ?? '')}" placeholder="${escAttr(opt.placeholder || '')}" spellcheck="false" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
+    </label>`;
+}
 function cardTemplate(id,meta,data,animate){
   const enabled=!!data.enabled;
-  const icon=ICONS[id]||'';
+  const icon=iconFor(id);
   const isFocused=focusedId===id;
   const enterClass = animate ? 'enter' : '';
+  const overlay = !!meta.overlay;
+  const opts = (meta.options||[]).map(o=>optionHtml(id,o,data)).join('');
   return `<div class="card p-4 flex flex-col gap-3 ${isFocused?'focused':''} ${enterClass}" data-id="${id}" style="${animate?`animation-delay:${Math.random()*60}ms`:''}">
     <div class="card-header flex items-start justify-between gap-3" data-open="${id}">
       <div class="flex gap-3 flex-1 min-w-0">
@@ -568,48 +650,17 @@ function cardTemplate(id,meta,data,animate){
           <span class="text-xs font-medium" style="color:var(--text-muted)">Configuring <span style="color:var(--text-bright)">${meta.name}</span></span>
           <button class="text-xs px-2.5 py-1 rounded-full border font-medium" style="border-color:var(--border);background:var(--card);color:var(--text-muted)" data-back="${id}">← Back</button>
         </div>
-        <div class="text-[11px] px-3 py-2 rounded-full border flex items-center gap-2" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">Position edited in <button class="underline" style="color:var(--accent)" onclick="document.querySelector('[data-tab=editor]').click()">HUD Editor</button> • <span style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${data.x}, ${data.y}</span></div>
-        <div class="space-y-3 pt-3 border-t" style="border-color:var(--border)">
+        ${overlay?`<div class="text-[11px] px-3 py-2 rounded-full border flex items-center gap-2" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">Position edited in <button class="underline" style="color:var(--accent)" onclick="document.querySelector('[data-tab=editor]').click()">HUD Editor</button> • <span style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${data.x}, ${data.y}</span></div>`:''}
+        ${overlay?`<div class="space-y-3 pt-3 border-t" style="border-color:var(--border)">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium" style="color:var(--text-muted)">Background</span>
             <div class="toggle ${data.background?'active':''}" data-bg-toggle="${id}"><div class="toggle-dot"></div></div>
           </div>
           <div class="${data.background?'':'hidden'} space-y-2" data-bg-section="${id}">
-            <div class="flex gap-2 items-center">
-              <div class="w-6 h-6 rounded-full border shrink-0" style="background:${data.backgroundColor||'#1A1B20'};border-color:var(--border)" data-bg-preview="${id}"></div>
-              <input data-field="backgroundColor" data-id="${id}" value="${data.backgroundColor||'#1A1B20'}" placeholder="#1A1B20" spellcheck="false" class="field-input flex-1 px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
-              <button class="picker-icon-btn" data-bg-picker-toggle="${id}" title="Color picker"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.31 0z"/><circle cx="12" cy="12" r="2.2"/></svg></button>
-            </div>
-            <div class="picker-wrap" data-bg-picker="${id}">
-              <div class="sv-box" data-bg-sv="${id}" style="width:140px;height:90px"><div class="sv-cursor" data-bg-svcur="${id}"></div></div>
-              <div class="hue-bar" data-bg-hue="${id}" style="height:90px"><div class="hue-cursor" data-bg-huecur="${id}"></div></div>
-              <div class="alpha-bar" data-bg-alpha="${id}" style="height:90px" title="Transparency"><div class="alpha-cursor" data-bg-alphacur="${id}"></div></div>
-            </div>
+            ${colorOptionHtml(id, 'backgroundColor', 'Background color', null, data.backgroundColor||'#1A1B20', '#1A1B20', false, true)}
           </div>
-          <div class="space-y-2">
-            <span class="text-xs font-medium" style="color:var(--text-muted)">Text color <span class="text-[10px]">(empty = auto by ping)</span></span>
-            <div class="flex gap-2 items-center">
-              <div class="w-6 h-6 rounded-full border shrink-0" style="background:${data.textColor||'transparent'};border-color:var(--border); ${!data.textColor?'background: repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px':''}" data-text-preview="${id}"></div>
-              <input data-field="textColor" data-id="${id}" value="${data.textColor||''}" placeholder="auto" spellcheck="false" class="field-input flex-1 px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
-              <button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=textColor]').value=''; this.closest('[data-id]').querySelector('[data-field=textColor]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>
-              <button class="picker-icon-btn" data-text-picker-toggle="${id}" title="Color picker"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.31 0z"/><circle cx="12" cy="12" r="2.2"/></svg></button>
-            </div>
-            <div class="picker-wrap" data-text-picker="${id}">
-              <div class="sv-box" data-text-sv="${id}" style="width:140px;height:90px"><div class="sv-cursor" data-text-svcur="${id}"></div></div>
-              <div class="hue-bar" data-text-hue="${id}" style="height:90px"><div class="hue-cursor" data-text-huecur="${id}"></div></div>
-              <div class="alpha-bar" data-text-alpha="${id}" style="height:90px" title="Transparency"><div class="alpha-cursor" data-text-alphacur="${id}"></div></div>
-            </div>
-          </div>
-          ${id==='ping'?`
-          <div class="space-y-2">
-            <label class="text-xs flex flex-col gap-1.5" style="color:var(--text-muted)">Format <span class="text-[10px]">placeholder {ping}, e.g. "{ping} ms" hides prefix, "Ping: {ping}" hides suffix</span>
-              <input data-field="format" data-id="${id}" value="${(data.format||'Ping: {ping} ms').replace(/"/g,'&quot;')}" placeholder="Ping: {ping} ms" spellcheck="false" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
-            </label>
-            <label class="flex items-center gap-2 text-xs" style="color:var(--text-muted)"><input type="checkbox" ${data.shadow?'checked':''} data-field="shadow" data-id="${id}" class="rounded accent-[var(--accent)]"> Text shadow</label>
-          </div>`:''}
-        </div>
-        <label class="text-xs flex flex-col gap-2" style="color:var(--text-muted)">Scale <span data-scale-label="${id}" style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${(data.scale??1).toFixed(2)}x</span> <input data-field="scale" data-id="${id}" type="range" min="0.5" max="2" step="0.01" value="${data.scale??1}" class="range"/></label>
-        <label class="text-xs flex flex-col gap-2" style="color:var(--text-muted)">Opacity <span data-opacity-label="${id}" style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${(data.opacity??1).toFixed(2)}</span> <input data-field="opacity" data-id="${id}" type="range" min="0.2" max="1" step="0.01" value="${data.opacity??1}" class="range"/></label>
+          ${opts}
+        </div>`:`<div class="space-y-3 pt-3 border-t" style="border-color:var(--border)">${opts}</div>`}
         <div class="flex items-center gap-2 pt-1">
           <button class="text-xs px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" data-reset="${id}">Reset</button>
           <span class="text-[11px]" style="color:var(--text-muted)">Click header to focus • Saves automatically</span>
@@ -624,7 +675,12 @@ function render(animate=false){
   const shouldAnimate = animate && !hasInitialRendered;
   const hudGrid=$('#hudGrid'), visualsGrid=$('#visualsGrid'), allGrid=$('#allGrid'); if(!hudGrid||!visualsGrid) return;
   hudGrid.innerHTML=''; visualsGrid.innerHTML=''; if(allGrid) allGrid.innerHTML='';
-  const allIds=Object.keys(MODULES_META);
+  if(!MODULE_ORDER.length){
+    if(hudGrid) hudGrid.innerHTML=defsNoticeHtml();
+    hasInitialRendered=true;
+    return;
+  }
+  const allIds=MODULE_ORDER;
   for(const id of allIds){
     if(focusedId && focusedId!==id) continue;
     const meta=MODULES_META[id];
@@ -635,7 +691,7 @@ function render(animate=false){
   }
   // all tab - filtered by search
   if(allGrid){
-    const allIdsAll = Object.keys(MODULES_META).filter(id=>{
+    const allIdsAll = MODULE_ORDER.filter(id=>{
       if(!searchQuery) return true;
       const m=MODULES_META[id];
       return m.name.toLowerCase().includes(searchQuery) || m.desc.toLowerCase().includes(searchQuery) || id.toLowerCase().includes(searchQuery) || m.cat.toLowerCase().includes(searchQuery);
@@ -683,19 +739,24 @@ function render(animate=false){
     b.onclick=(e)=>{
       e.stopPropagation();
       const id=b.getAttribute('data-reset');
-      send({type:'UPDATE_MODULE',id,data:{x:10,y:10,scale:1,opacity:1}});
-      const m=config.modules[id]={...config.modules[id], x:10,y:10,scale:1,opacity:1};
+      const cur=config.modules[id]||{};
+      const patch={};
+      for(const k of ['x','y','scale','opacity']) if(k in cur) patch[k]={x:10,y:10,scale:1,opacity:1}[k];
+      if(!Object.keys(patch).length) return;
+      send({type:'UPDATE_MODULE',id,data:patch});
+      const m=config.modules[id]={...cur, ...patch};
       const card=document.querySelector(`[data-id="${id}"]`);
       if(card){
         card.querySelectorAll('input[data-field]').forEach(inp=>{
           const f=inp.getAttribute('data-field');
-          if(f==='x') inp.value=m.x;
-          if(f==='y') inp.value=m.y;
-          if(f==='scale'){ inp.value=m.scale; updateSliderFill(inp); }
-          if(f==='opacity'){ inp.value=m.opacity; updateSliderFill(inp); }
+          if(f in patch){ inp.value=patch[f]; if(inp.type==='range') updateSliderFill(inp); }
         });
-        const s=card.querySelector(`[data-scale-label="${id}"]`); if(s) s.textContent=m.scale.toFixed(2)+'x';
-        const o=card.querySelector(`[data-opacity-label="${id}"]`); if(o) o.textContent=m.opacity.toFixed(2);
+        card.querySelectorAll('[data-opt-label]').forEach(sp=>{
+          const parts=sp.getAttribute('data-opt-label').split(':');
+          if(parts[0]!==id) return;
+          const k=parts.slice(1).join(':');
+          if(k in patch) sp.textContent = k==='scale' ? Number(patch[k]).toFixed(2)+'x' : Number(patch[k]).toFixed(2);
+        });
       }
     };
   });
@@ -712,62 +773,39 @@ function render(animate=false){
       send({type:'UPDATE_MODULE', id, data:{background: next}});
     };
   });
-  $$('[data-bg-picker-toggle]').forEach(btn=>{
+  $$('[data-color-picker-toggle]').forEach(btn=>{
     btn.onclick=(e)=>{
       e.stopPropagation();
       try{
-        const id=btn.getAttribute('data-bg-picker-toggle');
+        const ck=btn.getAttribute('data-color-picker-toggle');
+        const parts=ck.split(':'); const id=parts[0]; const key=parts.slice(1).join(':');
         const card=btn.closest('.card');
-        const picker=card ? card.querySelector(`[data-bg-picker="${id}"]`) : document.querySelector(`[data-bg-picker="${id}"]`);
-        const target=picker || document.querySelector(`[data-bg-picker="${id}"]`);
+        const picker=card ? card.querySelector(`[data-color-picker="${ck}"]`) : document.querySelector(`[data-color-picker="${ck}"]`);
+        const target=picker || document.querySelector(`[data-color-picker="${ck}"]`);
         if(!target) return;
         const willOpen=!target.classList.contains('open');
         target.classList.toggle('open', willOpen);
         btn.classList.toggle('open', willOpen);
         if(willOpen){
-          const mod=config.modules[id]||{}; const hex=mod.backgroundColor||'#1A1B20';
-          setupModulePicker(id, 'backgroundColor', hex, card);
+          const mod=config.modules[id]||{};
+          const hex=mod[key]||(key==='backgroundColor'?'#1A1B20':'#F9FAFB');
+          setupModulePicker(id, key, hex||'#1A1B20', card);
         }
-      }catch(err){ console.error('[MoidClient] bg picker toggle failed', err); }
-    };
-  });
-  $$('[data-text-picker-toggle]').forEach(btn=>{
-    btn.onclick=(e)=>{
-      e.stopPropagation();
-      try{
-        const id=btn.getAttribute('data-text-picker-toggle');
-        const card=btn.closest('.card');
-        const picker=card ? card.querySelector(`[data-text-picker="${id}"]`) : document.querySelector(`[data-text-picker="${id}"]`);
-        const target=picker || document.querySelector(`[data-text-picker="${id}"]`);
-        if(!target) return;
-        const willOpen=!target.classList.contains('open');
-        target.classList.toggle('open', willOpen);
-        btn.classList.toggle('open', willOpen);
-        if(willOpen){
-          const mod=config.modules[id]||{}; const hex=mod.textColor||'#F9FAFB';
-          setupModulePicker(id, 'textColor', hex||'#F9FAFB', card);
-        }
-      }catch(err){ console.error('[MoidClient] text picker toggle failed', err); }
+      }catch(err){ console.error('[MoidClient] color picker toggle failed', err); }
     };
   });
   // clicking the color preview dot also toggles the picker (UX fallback)
-  $$('[data-bg-preview]').forEach(dot=>{
+  $$('[data-color-preview]').forEach(dot=>{
     dot.style.cursor='pointer';
     dot.onclick=(e)=>{
       e.stopPropagation();
       const card=dot.closest('.card');
-      const id=card ? card.getAttribute('data-id') : null;
-      const tgl=card ? card.querySelector('[data-bg-picker-toggle]') : null;
-      if(tgl) tgl.click();
-      else if(id){ const b=document.querySelector(`[data-bg-picker-toggle="${id}"]`); if(b) b.click(); }
-    };
-  });
-  $$('[data-text-preview]').forEach(dot=>{
-    dot.style.cursor='pointer';
-    dot.onclick=(e)=>{
-      e.stopPropagation();
-      const card=dot.closest('.card');
-      const tgl=card ? card.querySelector('[data-text-picker-toggle]') : null;
+      const tgl=card ? card.querySelector('[data-color-picker-toggle]') : null;
+      const ck=dot.getAttribute('data-color-preview');
+      if(card && ck){
+        const scoped=card.querySelector(`[data-color-picker-toggle="${ck}"]`);
+        if(scoped){ scoped.click(); return; }
+      }
       if(tgl) tgl.click();
     };
   });
@@ -779,21 +817,17 @@ function render(animate=false){
       if(inp.type==='checkbox') val=inp.checked;
       else if(field==='x'||field==='y') val=parseInt(inp.value)||0;
       else if(field==='shadow' || field==='background') val=inp.checked;
-      else if(field==='scale'||field==='opacity') val=parseFloat(inp.value);
+      else if(inp.type==='range') val=parseFloat(inp.value);
       else val=inp.value;
       const patch={}; patch[field]=val; send({type:'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]=config.modules[id]||{x:10,y:10,scale:1,opacity:1,enabled:false}; m[field]=val;
       const card=document.querySelector(`[data-id="${id}"]`);
       if(card){
         if(isRange) updateSliderFill(inp);
-        const s=card.querySelector(`[data-scale-label="${id}"]`); if(s && field==='scale') s.textContent=parseFloat(val).toFixed(2)+'x';
-        const o=card.querySelector(`[data-opacity-label="${id}"]`); if(o && field==='opacity') o.textContent=parseFloat(val).toFixed(2);
-        if(field==='backgroundColor'){
-          const p=card.querySelector(`[data-bg-preview="${id}"]`); if(p) p.style.background=val||'#1A1B20';
-        }
-        if(field==='textColor'){
-          const p=card.querySelector(`[data-text-preview="${id}"]`); if(p){ if(!val){ p.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; } else { p.style.background=val; } }
-        }
+        const lbl=card.querySelector(`[data-opt-label="${id}:${field}"]`);
+        if(lbl && inp.type==='range') lbl.textContent = field==='scale' ? parseFloat(val).toFixed(2)+'x' : parseFloat(val).toFixed(2);
+        const cp=card.querySelector(`[data-color-preview="${id}:${field}"]`);
+        if(cp){ if(!val){ cp.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; } else { cp.style.background=val; } }
       }
       if(field==='background'){
         const sec=card?.querySelector(`[data-bg-section="${id}"]`); if(sec) sec.classList.toggle('hidden', !val);
@@ -809,8 +843,8 @@ function render(animate=false){
         const id=inp.getAttribute('data-id'); const field=inp.getAttribute('data-field');
         const card=document.querySelector(`[data-id="${id}"]`);
         if(card){
-          const s=card.querySelector(`[data-scale-label="${id}"]`); if(s && field==='scale') s.textContent=parseFloat(inp.value).toFixed(2)+'x';
-          const o=card.querySelector(`[data-opacity-label="${id}"]`); if(o && field==='opacity') o.textContent=parseFloat(inp.value).toFixed(2);
+          const lbl=card.querySelector(`[data-opt-label="${id}:${field}"]`);
+          if(lbl) lbl.textContent = field==='scale' ? parseFloat(inp.value).toFixed(2)+'x' : parseFloat(inp.value).toFixed(2);
         }
       });
       inp.addEventListener('change', handler);
@@ -821,6 +855,14 @@ function render(animate=false){
       let t; inp.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(handler, 300); });
     }
   });
+  $$('select[data-field]').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const id=sel.getAttribute('data-id'); const field=sel.getAttribute('data-field');
+      const val=sel.value;
+      const patch={}; patch[field]=val; send({type:'UPDATE_MODULE',id,data:patch});
+      const m=config.modules[id]=config.modules[id]||{x:10,y:10,scale:1,opacity:1,enabled:false}; m[field]=val;
+    });
+  });
   hasInitialRendered=true;
 }
 function patchFromSync(newData){
@@ -829,7 +871,7 @@ function patchFromSync(newData){
   if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
   const allCountEl=document.querySelector('#allCount');
   if(allCountEl){
-    const filtered = Object.keys(MODULES_META).filter(id=>{
+    const filtered = MODULE_ORDER.filter(id=>{
       if(!searchQuery) return true;
       const m=MODULES_META[id];
       return m.name.toLowerCase().includes(searchQuery) || m.desc.toLowerCase().includes(searchQuery) || id.toLowerCase().includes(searchQuery);
@@ -851,22 +893,36 @@ function patchFromSync(newData){
       const f=inp.getAttribute('data-field');
       if(f==='x') inp.value=data.x;
       else if(f==='y') inp.value=data.y;
-      else if(f==='scale'){ inp.value=data.scale??1; updateSliderFill(inp); }
-      else if(f==='opacity'){ inp.value=data.opacity??1; updateSliderFill(inp); }
-      else if(f==='backgroundColor') inp.value=data.backgroundColor||'#1A1B20';
-      else if(f==='textColor') inp.value=data.textColor||'';
-      else if(f==='format') inp.value=data.format||'';
-      else if(f==='shadow' || f==='background') inp.checked=!!data[f];
+      else if(inp.type==='range'){ if(data[f]!==undefined && data[f]!==null){ inp.value=data[f]; updateSliderFill(inp); } }
+      else if(inp.type==='checkbox') inp.checked=!!data[f];
+      else inp.value=(data[f] ?? '');
     });
-    const s=card.querySelector(`[data-scale-label="${id}"]`); if(s) s.textContent=(data.scale??1).toFixed(2)+'x';
-    const o=card.querySelector(`[data-opacity-label="${id}"]`); if(o) o.textContent=(data.opacity??1).toFixed(2);
-    const bgPrev=card.querySelector(`[data-bg-preview="${id}"]`); if(bgPrev) bgPrev.style.background=data.backgroundColor||'#1A1B20';
-    const txPrev=card.querySelector(`[data-text-preview="${id}"]`); if(txPrev){ if(!data.textColor) txPrev.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; else txPrev.style.background=data.textColor; }
+    card.querySelectorAll('select[data-field]').forEach(sel=>{
+      if(document.activeElement===sel) return;
+      const f=sel.getAttribute('data-field');
+      if(data[f]!==undefined && data[f]!==null) sel.value=data[f];
+    });
+    card.querySelectorAll('[data-opt-label]').forEach(sp=>{
+      const parts=sp.getAttribute('data-opt-label').split(':');
+      if(parts[0]!==id) return;
+      const k=parts.slice(1).join(':');
+      const v=data[k];
+      if(v===undefined || v===null) return;
+      sp.textContent = k==='scale' ? Number(v).toFixed(2)+'x' : Number(v).toFixed(2);
+    });
+    card.querySelectorAll('[data-color-preview]').forEach(p=>{
+      const parts=p.getAttribute('data-color-preview').split(':');
+      if(parts[0]!==id) return;
+      const k=parts.slice(1).join(':');
+      const v=data[k];
+      if(!v){ p.style.background='repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px'; }
+      else { p.style.background=v; }
+    });
     const bgTog=card.querySelector(`[data-bg-toggle="${id}"]`); if(bgTog && !bgRecentlyToggled) bgTog.classList.toggle('active', !!data.background);
     const bgSec=card.querySelector(`[data-bg-section="${id}"]`); if(bgSec && !bgRecentlyToggled) bgSec.classList.toggle('hidden', !data.background);
   });
   const existingIds=new Set([...document.querySelectorAll('.card[data-id]')].map(c=>c.getAttribute('data-id')));
-  const neededIds=focusedId ? [focusedId] : Object.keys(MODULES_META);
+  const neededIds=focusedId ? [focusedId] : MODULE_ORDER.slice();
   const needsFull = neededIds.some(id=> !existingIds.has(id)) || existingIds.size !== neededIds.length;
   if(needsFull) render(false);
 }
@@ -1004,8 +1060,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   // HUD editor X/Y inputs — target selected item, fallback to first enabled
   function getEditorTargetId(){
     if(editorSelectedId && config.modules[editorSelectedId]) return editorSelectedId;
-    const enabled=Object.keys(MODULES_META).find(id=>config.modules[id] && config.modules[id].enabled);
-    return enabled || Object.keys(MODULES_META)[0];
+    const enabled=MODULE_ORDER.find(id=>config.modules[id] && config.modules[id].enabled);
+    return enabled || MODULE_ORDER[0];
   }
   const ex=document.querySelector('#editorX'), ey=document.querySelector('#editorY');
   if(ex){
@@ -1055,9 +1111,22 @@ document.addEventListener('DOMContentLoaded',()=>{
     searchEl.addEventListener('input', e=>{ searchQuery=e.target.value.toLowerCase(); render(false); });
   }
   connect();
-  config.modules=Object.fromEntries(Object.keys(MODULES_META).map(k=>[k,{enabled:false,x:10,y:10,scale:1,opacity:1}]));
+  config.modules=Object.fromEntries(MODULE_ORDER.map(k=>[k,{enabled:false,x:10,y:10,scale:1,opacity:1}]));
   render(true);
   setTimeout(syncEditorItem, 200);
+  // module definitions come from the game - retry until available, then render for real
+  let bootTries=0;
+  const boot=async ()=>{
+    bootTries++;
+    if(await loadModuleDefs()){
+      focusedId=null;
+      render(false);
+      setTimeout(syncEditorItem, 80);
+    } else if(bootTries<40){
+      setTimeout(boot, 3000);
+    }
+  };
+  setTimeout(boot, 400);
 });
 function downloadJson(obj,name){
   const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});

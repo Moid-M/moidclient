@@ -1,6 +1,8 @@
 package com.moidclient.hud.keystrokes;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.module.ModuleDef;
+import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -15,6 +17,26 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class KeystrokesHud {
     private KeystrokesHud() {}
+
+    public static ModuleDef definition() {
+        return new ModuleDef("keystrokes", "Keystrokes", "WASD + mouse overlay.", "hud", true,
+            ModuleOption.list(
+                ModuleOption.bool("keystrokesShowW", "Show W"),
+                ModuleOption.bool("keystrokesShowA", "Show A"),
+                ModuleOption.bool("keystrokesShowS", "Show S"),
+                ModuleOption.bool("keystrokesShowD", "Show D"),
+                ModuleOption.bool("keystrokesShowMouse", "Show mouse buttons"),
+                ModuleOption.bool("keystrokesShowSpace", "Show space"),
+                ModuleOption.bool("keystrokesShowShift", "Show shift"),
+                ModuleOption.bool("keystrokesShowCps", "Show CPS on mouse buttons"),
+                ModuleOption.slider("keystrokesGap", "Key gap", 0, 10, 1),
+                ModuleOption.bool("keystrokesOutline", "Key outlines"),
+                ModuleOption.nullableColor("keystrokesPressedColor", "Pressed color", "empty = accent"),
+                ModuleOption.bool("shadow", "Text shadow"),
+                ModuleOption.scale(),
+                ModuleOption.opacity()
+            ));
+    }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {
         if (config == null) return;

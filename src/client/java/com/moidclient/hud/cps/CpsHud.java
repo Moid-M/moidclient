@@ -1,6 +1,8 @@
 package com.moidclient.hud.cps;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.module.ModuleDef;
+import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -26,6 +28,18 @@ public final class CpsHud {
     private static long lastPeakReset = System.currentTimeMillis();
 
     private CpsHud() {}
+
+    public static ModuleDef definition() {
+        return new ModuleDef("cpsCounter", "CPS Counter", "Clicks per second - left | right with burst fire.", "hud", true,
+            ModuleOption.list(
+                ModuleOption.text("format", "Format", "CPS: {left} | {right}"),
+                ModuleOption.bool("shadow", "Text shadow"),
+                ModuleOption.select("cpsMode", "Buttons shown", java.util.List.of("both", "left", "right")),
+                ModuleOption.bool("cpsDynamicColor", "Dynamic color (burst green)"),
+                ModuleOption.scale(),
+                ModuleOption.opacity()
+            ));
+    }
 
     /** Called every client tick to poll mouse buttons */
     public static void onTick() {
