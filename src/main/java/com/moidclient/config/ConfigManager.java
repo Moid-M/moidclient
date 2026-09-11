@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -271,13 +274,19 @@ public class ConfigManager {
                 }
             }
             this.root = out;
-            // atomic write: write to tmp then rename
+            // atomic write: write to tmp then move over the live file.
+            // NOTE: File.renameTo() cannot replace an existing file on Windows
+            // (fails silently with `false`), so use Files.move instead.
             File tmp = new File(configFile.getParentFile(), configFile.getName() + ".tmp");
             try (FileWriter writer = new FileWriter(tmp)) {
                 GSON.toJson(out, writer);
             }
-            //noinspection ResultOfMethodCallIgnored
-            tmp.renameTo(configFile);
+            try {
+                Files.move(tmp.toPath(), configFile.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp.toPath(), configFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (Exception e) {
             LOGGER.error("[MoidClient] Failed to save config", e);
         }
