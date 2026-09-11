@@ -68,6 +68,10 @@ public class ConfigManager {
         public String keystrokesPressedColor = null; // null = accent
         // fullbright specific
         public double fullbrightGamma = 12.0; // gamma when enabled (1-15)
+        // block outline specific
+        public double blockOutlineWidth = 2.0; // line thickness (1-5)
+        public boolean blockOutlineFade = false; // gradient to second color
+        public String blockOutlineColor2 = null; // null = solid color1
 
         public ModuleConfig() {}
         public ModuleConfig(boolean enabled, int x, int y) {
@@ -225,6 +229,11 @@ public class ConfigManager {
                 if (c.fullbrightGamma == 0) c.fullbrightGamma = 12.0;
                 c.fullbrightGamma = Math.max(1.0, Math.min(15.0, c.fullbrightGamma));
             }
+            // block outline thickness 1-5
+            if (e.getKey().equals("blockOutline")) {
+                if (c.blockOutlineWidth == 0) c.blockOutlineWidth = 2.0;
+                c.blockOutlineWidth = Math.max(1.0, Math.min(5.0, c.blockOutlineWidth));
+            }
         }
         ModuleConfig ping = modules.get("ping");
         if (ping != null && ping.format == null) ping.format = "Ping: {ping} ms";
@@ -364,6 +373,15 @@ public class ConfigManager {
             else cfg.keystrokesPressedColor = data.get("keystrokesPressedColor").getAsString();
         }
         if (data.has("fullbrightGamma")) cfg.fullbrightGamma = data.get("fullbrightGamma").getAsDouble();
+        if (data.has("blockOutlineWidth")) cfg.blockOutlineWidth = data.get("blockOutlineWidth").getAsDouble();
+        if (data.has("blockOutlineFade")) cfg.blockOutlineFade = data.get("blockOutlineFade").getAsBoolean();
+        if (data.has("blockOutlineColor2")) {
+            if (data.get("blockOutlineColor2").isJsonNull()) cfg.blockOutlineColor2 = null;
+            else {
+                String c = data.get("blockOutlineColor2").getAsString();
+                if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.blockOutlineColor2 = c.isEmpty() ? null : c;
+            }
+        }
         save();
     }
 

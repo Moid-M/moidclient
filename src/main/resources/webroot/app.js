@@ -689,7 +689,9 @@ function render(animate=false){
     const target=meta.cat==='visuals'?visualsGrid:hudGrid;
     target.insertAdjacentHTML('beforeend',html);
   }
-  // all tab - filtered by search
+  // all tab - grouped into foldable category sections, filtered by search
+  const CAT_NAMES = {hud:'HUD Overlays', visuals:'Visuals', utility:'Utility'};
+  function catName(cat){ return CAT_NAMES[cat] || (cat.charAt(0).toUpperCase()+cat.slice(1)); }
   if(allGrid){
     const allIdsAll = MODULE_ORDER.filter(id=>{
       if(!searchQuery) return true;
@@ -697,11 +699,36 @@ function render(animate=false){
       return m.name.toLowerCase().includes(searchQuery) || m.desc.toLowerCase().includes(searchQuery) || id.toLowerCase().includes(searchQuery) || m.cat.toLowerCase().includes(searchQuery);
     });
     const visibleAll = focusedId ? allIdsAll.filter(id=>id===focusedId) : allIdsAll;
-    for(const id of visibleAll){
-      const meta=MODULES_META[id]; const data=(config.modules&&config.modules[id])||{enabled:false,x:10,y:10,scale:1,opacity:1};
-      const html=cardTemplate(id,meta,data,shouldAnimate);
-      allGrid.insertAdjacentHTML('beforeend',html);
+    const catsInOrder = [...new Set(MODULE_ORDER.map(id=>MODULES_META[id].cat))];
+    for(const cat of catsInOrder){
+      const ids = visibleAll.filter(id=>MODULES_META[id].cat===cat);
+      if(!ids.length) continue;
+      const collapsed = !searchQuery && !focusedId && localStorage.getItem('cc_cat_'+cat)==='1';
+      allGrid.insertAdjacentHTML('beforeend',
+        `<button class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs font-medium mb-2" style="border-color:var(--border);background:var(--card);color:var(--text-bright)" data-cat-header="${cat}">
+          <span>${catName(cat)} <span style="color:var(--text-muted)">• ${ids.length}</span></span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="transition: transform 220ms; ${collapsed?'transform: rotate(-90deg);':''}" data-cat-chevron="${cat}"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mb-4" data-cat-grid="${cat}" ${collapsed?'style="display:none"':''}></div>`);
+      const grid = allGrid.querySelector(`[data-cat-grid="${cat}"]`);
+      for(const id of ids){
+        const meta=MODULES_META[id]; const data=(config.modules&&config.modules[id])||{enabled:false,x:10,y:10,scale:1,opacity:1};
+        const html=cardTemplate(id,meta,data,shouldAnimate);
+        grid.insertAdjacentHTML('beforeend',html);
+      }
     }
+    allGrid.querySelectorAll('[data-cat-header]').forEach(h=>{
+      h.onclick=()=>{
+        const cat=h.getAttribute('data-cat-header');
+        const grid=allGrid.querySelector(`[data-cat-grid="${cat}"]`);
+        const chev=allGrid.querySelector(`[data-cat-chevron="${cat}"]`);
+        if(!grid) return;
+        const isHidden=grid.style.display==='none';
+        grid.style.display=isHidden?'':'none';
+        if(chev) chev.style.transform=isHidden?'':'rotate(-90deg)';
+        try{ localStorage.setItem('cc_cat_'+cat, isHidden?'0':'1'); }catch(e){}
+      };
+    });
     const allCountEl=document.querySelector('#allCount'); if(allCountEl) allCountEl.textContent=allIdsAll.length;
     const noRes=document.querySelector('#noResults'); if(noRes) noRes.classList.toggle('hidden', allIdsAll.length>0);
   }
