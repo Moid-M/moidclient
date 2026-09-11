@@ -364,6 +364,14 @@ body{
 .picker-icon-btn:active{ transform: scale(0.94); background: color-mix(in srgb, var(--accent) 12%, var(--card)); color:var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
 .picker-icon-btn.open{ background: color-mix(in srgb, var(--accent) 14%, var(--card)); color:var(--accent); border-color: color-mix(in srgb, var(--accent) 28%, var(--border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
 
+/* foldable category sections + reveal rows - smooth expand/collapse */
+.cat-chevron{ transition: transform 260ms var(--ease-spring); }
+.cat-chevron.flipped{ transform: rotate(-90deg); }
+.cat-grid{ overflow:hidden; max-height:2600px; opacity:1; transition: max-height 450ms var(--ease-out), opacity 300ms var(--ease-smooth); }
+.cat-grid.collapsed{ max-height:0 !important; opacity:0 !important; margin-top:0 !important; margin-bottom:0 !important; pointer-events:none; }
+.reveal-wrap{ overflow:hidden; max-height:0; opacity:0; transform:translateY(-4px); transition: max-height 350ms var(--ease-out), opacity 280ms var(--ease-smooth), transform 320ms var(--ease-out); }
+.reveal-wrap.open{ max-height:280px; opacity:1; transform:none; }
+
 /* all buttons fully round - pill */
 button[class*="rounded-"], .btn-accent, .field-input, .focus-bar{
   border-radius: 999px !important;

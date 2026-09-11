@@ -171,9 +171,12 @@ function setupTextPicker(svId,hueId,svCursorId,hueCursorId){
 }
 function handleWindowSize(data){
   windowSize=data;
-  const outer=document.querySelector('#hudPreviewOuter');
-  if(outer){
-    outer.style.aspectRatio = data.scaledWidth + ' / ' + data.scaledHeight;
+  document.querySelectorAll('.hudPreviewOuter').forEach(o=>{
+    o.style.aspectRatio = data.scaledWidth + ' / ' + data.scaledHeight;
+  });
+  const main=document.querySelector('#hudPreviewOuter');
+  if(main && !main.classList.contains('hudPreviewOuter')){
+    main.style.aspectRatio = data.scaledWidth + ' / ' + data.scaledHeight;
   }
   const label=document.querySelector('#windowSizeLabel');
   if(label) label.textContent = data.width+'x'+data.height+' -> '+data.scaledWidth+'x'+data.scaledHeight+' @'+data.guiScale+'x';
@@ -267,9 +270,12 @@ function syncEditorItems(){
   const enabledIds=MODULE_ORDER.filter(id=>{
     const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.cat==='hud';
   });
-  const hudKeys=MODULE_ORDER.filter(k=>MODULES_META[k].cat==='hud');
+  const hudKeys=MODULE_ORDER.filter(k=>MODULES_META[k] && MODULES_META[k].cat==='hud');
   const idsToShow = enabledIds.length ? enabledIds : hudKeys.slice(0,2);
-  const rect=outer.getBoundingClientRect();
+  const outers=[outer, ...[...document.querySelectorAll('.hudPreviewOuter')].filter(o=>o!==outer)];
+  for(const box of outers){
+  box.querySelectorAll('.hud-preview-item').forEach(e=>e.remove());
+  const rect=box.getBoundingClientRect();
   const sx= rect.width / windowSize.scaledWidth;
   const sy= rect.height / windowSize.scaledHeight;
   idsToShow.forEach(id=>{
@@ -349,8 +355,9 @@ function syncEditorItems(){
     el.style.left=(x * sx)+'px';
     el.style.top=(y * sy)+'px';
     if(editorSelectedId===id){ el.style.outline='2px solid var(--accent)'; el.style.outlineOffset='1px'; el.style.zIndex='2'; }
-    outer.appendChild(el);
+    box.appendChild(el);
   });
+  }
   const selLabel=document.querySelector('#editorSelectedLabel');
   if(selLabel) selLabel.textContent = editorSelectedId ? (MODULES_META[editorSelectedId]?.name || editorSelectedId) : (enabledIds[0] ? (MODULES_META[enabledIds[0]]?.name||enabledIds[0]) : '-');
   const selMod = editorSelectedId ? config.modules[editorSelectedId] : (enabledIds[0] ? config.modules[enabledIds[0]] : null);
@@ -361,8 +368,11 @@ function syncEditorItems(){
 }
 function syncEditorItem(){ try{ syncEditorItems(); }catch(e){ console.error('[MoidClient] syncEditorItem error', e); } }
 function setupEditorDrag(){
-  const outer=document.querySelector('#hudPreviewOuter');
-  if(!outer) return;
+  const outers=[...document.querySelectorAll('.hudPreviewOuter')];
+  const main=document.querySelector('#hudPreviewOuter');
+  if(main && !outers.includes(main)) outers.unshift(main);
+  if(!outers.length) return;
+  for(const outer of outers){
   let dragging=false, dragId=null, startX=0, startY=0, startModX=0, startModY=0, dragEl=null;
   let lastDragSend=0;
   outer.addEventListener('pointerdown', e=>{
@@ -426,6 +436,7 @@ function setupEditorDrag(){
   }
   outer.addEventListener('pointerup', endEditorDrag);
   outer.addEventListener('pointercancel', endEditorDrag);
+  }
 }
 function setupModulePicker(id, field, hex, scopeCard){
   const isBg = field==='backgroundColor';
@@ -606,6 +617,12 @@ function optionHtml(id, opt, data){
   const hint = opt.hint ? ` <span class="text-[10px]">${opt.hint}</span>` : '';
   const val = data[key];
   if(type === 'boolean'){
+    if(opt.reveals){
+      return `<div class="flex items-center justify-between gap-3">
+        <span class="text-xs font-medium" style="color:var(--text-muted)">${label}</span>
+        <div class="toggle ${val?'active':''}" data-reveal-toggle="${id}:${key}" data-reveals="${opt.reveals}"><div class="toggle-dot"></div></div>
+      </div>`;
+    }
     return `<label class="flex items-center gap-2 text-xs" style="color:var(--text-muted)"><input type="checkbox" ${val ? 'checked' : ''} data-field="${key}" data-id="${id}" class="rounded accent-[var(--accent)]"> ${label}</label>`;
   }
   if(type === 'slider'){
@@ -619,8 +636,7 @@ function optionHtml(id, opt, data){
     return `<label class="text-xs flex flex-col gap-1.5" style="color:var(--text-muted)">${label}${hint}<select data-field="${key}" data-id="${id}" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs" style="background:var(--bg);border-color:var(--border);color:var(--text-bright)">${opts}</select></label>`;
   }
   if(type === 'color'){
-    const withAlpha = (key === 'backgroundColor' || key === 'textColor');
-    return colorOptionHtml(id, key, label, opt.hint, val || '', opt.placeholder, !!opt.nullable, withAlpha);
+    return colorOptionHtml(id, key, label, opt.hint, val || '', opt.placeholder, !!opt.nullable, true);
   }
   return `<label class="text-xs flex flex-col gap-1.5" style="color:var(--text-muted)">${label}${hint}
       <input data-field="${key}" data-id="${id}" value="${escAttr(val ?? '')}" placeholder="${escAttr(opt.placeholder || '')}" spellcheck="false" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
@@ -632,7 +648,13 @@ function cardTemplate(id,meta,data,animate){
   const isFocused=focusedId===id;
   const enterClass = animate ? 'enter' : '';
   const overlay = !!meta.overlay;
-  const opts = (meta.options||[]).map(o=>optionHtml(id,o,data)).join('');
+  const revealedBy = {};
+  for(const o of (meta.options||[])) if(o.reveals) revealedBy[o.reveals]=o.key;
+  const opts = (meta.options||[]).map(o=>{
+    const html=optionHtml(id,o,data);
+    if(revealedBy[o.key]) return `<div class="reveal-wrap ${data[revealedBy[o.key]]?'open':''}" data-reveal-wrap="${id}:${o.key}">${html}</div>`;
+    return html;
+  }).join('');
   return `<div class="card p-4 flex flex-col gap-3 ${isFocused?'focused':''} ${enterClass}" data-id="${id}" style="${animate?`animation-delay:${Math.random()*60}ms`:''}">
     <div class="card-header flex items-start justify-between gap-3" data-open="${id}">
       <div class="flex gap-3 flex-1 min-w-0">
@@ -707,9 +729,9 @@ function render(animate=false){
       allGrid.insertAdjacentHTML('beforeend',
         `<button class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs font-medium mb-2" style="border-color:var(--border);background:var(--card);color:var(--text-bright)" data-cat-header="${cat}">
           <span>${catName(cat)} <span style="color:var(--text-muted)">• ${ids.length}</span></span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="transition: transform 220ms; ${collapsed?'transform: rotate(-90deg);':''}" data-cat-chevron="${cat}"><path d="M6 9l6 6 6-6"/></svg>
+          <svg class="cat-chevron ${collapsed?'flipped':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" data-cat-chevron="${cat}"><path d="M6 9l6 6 6-6"/></svg>
         </button>
-        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mb-4" data-cat-grid="${cat}" ${collapsed?'style="display:none"':''}></div>`);
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mb-4 cat-grid ${collapsed?'collapsed':''}" data-cat-grid="${cat}"></div>`);
       const grid = allGrid.querySelector(`[data-cat-grid="${cat}"]`);
       for(const id of ids){
         const meta=MODULES_META[id]; const data=(config.modules&&config.modules[id])||{enabled:false,x:10,y:10,scale:1,opacity:1};
@@ -717,16 +739,38 @@ function render(animate=false){
         grid.insertAdjacentHTML('beforeend',html);
       }
     }
+    if(!focusedId && !searchQuery){
+      const edCollapsed = localStorage.getItem('cc_cat__editor')==='1';
+      allGrid.insertAdjacentHTML('beforeend',
+        `<button class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs font-medium mb-2" style="border-color:var(--border);background:var(--card);color:var(--text-bright)" data-cat-header="_editor">
+          <span>HUD Editor <span style="color:var(--text-muted)">• live preview</span></span>
+          <svg class="cat-chevron ${edCollapsed?'flipped':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" data-cat-chevron="_editor"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cat-grid ${edCollapsed?'collapsed':''} mb-4" data-cat-grid="_editor">
+          <div class="card p-4 space-y-3">
+            <div class="hudPreviewOuter relative w-full rounded-xl border overflow-hidden select-none" style="border-color:var(--border);background:#0a0c0f; aspect-ratio: 16 / 9; touch-action:none;">
+              <div class="absolute inset-0 opacity-[0.07]" style="background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 24px 24px;"></div>
+              <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span class="text-[10px] tracking-widest uppercase px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--card);color:var(--text-muted)">Minecraft Window</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px]" style="color:var(--text-muted)">Drag overlays directly</span>
+              <button class="text-xs px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="document.querySelector('[data-tab=editor]').click()">Open full editor</button>
+            </div>
+          </div>
+        </div>`);
+    }
     allGrid.querySelectorAll('[data-cat-header]').forEach(h=>{
       h.onclick=()=>{
         const cat=h.getAttribute('data-cat-header');
         const grid=allGrid.querySelector(`[data-cat-grid="${cat}"]`);
         const chev=allGrid.querySelector(`[data-cat-chevron="${cat}"]`);
         if(!grid) return;
-        const isHidden=grid.style.display==='none';
-        grid.style.display=isHidden?'':'none';
-        if(chev) chev.style.transform=isHidden?'':'rotate(-90deg)';
-        try{ localStorage.setItem('cc_cat_'+cat, isHidden?'0':'1'); }catch(e){}
+        const willOpen=grid.classList.contains('collapsed');
+        grid.classList.toggle('collapsed', !willOpen);
+        if(chev) chev.classList.toggle('flipped', !willOpen);
+        try{ localStorage.setItem('cc_cat_'+cat, willOpen?'0':'1'); }catch(e){}
       };
     });
     const allCountEl=document.querySelector('#allCount'); if(allCountEl) allCountEl.textContent=allIdsAll.length;
@@ -798,6 +842,24 @@ function render(animate=false){
       lastBgToggle=Date.now();
       const sec=document.querySelector(`[data-bg-section="${id}"]`); if(sec) sec.classList.toggle('hidden', !next);
       send({type:'UPDATE_MODULE', id, data:{background: next}});
+    };
+  });
+  $$('[data-reveal-toggle]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
+      const ck=btn.getAttribute('data-reveal-toggle');
+      const parts=ck.split(':'); const id=parts[0]; const key=parts.slice(1).join(':');
+      const target=btn.getAttribute('data-reveals');
+      const cur=config.modules[id]=config.modules[id]||{};
+      const next=!cur[key];
+      cur[key]=next;
+      btn.classList.toggle('active', next);
+      const patch={}; patch[key]=next; send({type:'UPDATE_MODULE',id,data:patch});
+      const card=btn.closest('.card');
+      if(card){
+        const w=card.querySelector(`[data-reveal-wrap="${id}:${target}"]`);
+        if(w) w.classList.toggle('open', next);
+      }
     };
   });
   $$('[data-color-picker-toggle]').forEach(btn=>{
@@ -947,6 +1009,15 @@ function patchFromSync(newData){
     });
     const bgTog=card.querySelector(`[data-bg-toggle="${id}"]`); if(bgTog && !bgRecentlyToggled) bgTog.classList.toggle('active', !!data.background);
     const bgSec=card.querySelector(`[data-bg-section="${id}"]`); if(bgSec && !bgRecentlyToggled) bgSec.classList.toggle('hidden', !data.background);
+    card.querySelectorAll('[data-reveal-toggle]').forEach(t=>{
+      const parts=t.getAttribute('data-reveal-toggle').split(':');
+      if(parts[0]!==id) return;
+      const k=parts.slice(1).join(':');
+      t.classList.toggle('active', !!data[k]);
+      const target=t.getAttribute('data-reveals');
+      const w=card.querySelector(`[data-reveal-wrap="${id}:${target}"]`);
+      if(w) w.classList.toggle('open', !!data[k]);
+    });
   });
   const existingIds=new Set([...document.querySelectorAll('.card[data-id]')].map(c=>c.getAttribute('data-id')));
   const neededIds=focusedId ? [focusedId] : MODULE_ORDER.slice();

@@ -5,9 +5,13 @@ import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -23,18 +27,45 @@ public final class BlockOutlineRenderer {
         return new ModuleDef("blockOutline", "Block Outline", "Custom color outline on the targeted block.", "visuals", false,
             ModuleOption.list(
                 ModuleOption.nullableColor("textColor", "Outline color", "empty = accent"),
-                ModuleOption.bool("blockOutlineFade", "Color fade (bottom to top)"),
+                ModuleOption.select("blockOutlineMode", "Mode", java.util.List.of("block", "face")),
+                ModuleOption.revealToggle("blockOutlineFade", "Color fade", "blockOutlineColor2"),
                 ModuleOption.nullableColor("blockOutlineColor2", "Fade color", "empty = none"),
                 ModuleOption.slider("blockOutlineWidth", "Thickness", 1, 5, 0.5),
                 ModuleOption.opacity()
             ));
     }
 
-    private static float[] fadeColor(float r, float g, float b, float r2, float g2, float b2,
-                                     double y, double minY, double height, boolean useFade) {
+    /** Seamless flowing gradient factor: loops every ~3s, no visible seam. */
+    private static float[] flowColor(float r, float g, float b, float r2, float g2, float b2,
+                                     double y, double minY, double height, boolean useFade, double phase) {
         if (!useFade || height <= 1e-6) return new float[]{r, g, b};
         float t = (float) Math.max(0.0, Math.min(1.0, (y - minY) / height));
-        return new float[]{r + (r2 - r) * t, g + (g2 - g) * t, b + (b2 - b) * t};
+        float m = 0.5f - 0.5f * (float) Math.cos(6.2831855f * (t - (float) phase));
+        return new float[]{r + (r2 - r) * m, g + (g2 - g) * m, b + (b2 - b) * m};
+    }
+
+    private static boolean onFace(double x1, double y1, double z1, double x2, double y2, double z2,
+                                  Direction dir, AABB bounds) {
+        final double e = 1e-4;
+        return switch (dir) {
+            case UP -> y1 >= bounds.maxY - e && y2 >= bounds.maxY - e;
+            case DOWN -> y1 <= bounds.minY + e && y2 <= bounds.minY + e;
+            case NORTH -> z1 <= bounds.minZ + e && z2 <= bounds.minZ + e;
+            case SOUTH -> z1 >= bounds.maxZ - e && z2 >= bounds.maxZ - e;
+            case WEST -> x1 <= bounds.minX + e && x2 <= bounds.minX + e;
+            case EAST -> x1 >= bounds.maxX - e && x2 >= bounds.maxX - e;
+        };
+    }
+
+    private static Direction targetFace(BlockPos pos) {
+        try {
+            var hit = Minecraft.getInstance().hitResult;
+            if (hit instanceof BlockHitResult bhr && hit.getType() != HitResult.Type.MISS
+                    && bhr.getBlockPos().equals(pos)) {
+                return bhr.getDirection();
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     public static void register(ConfigManager config) {
@@ -79,9 +110,12 @@ public final class BlockOutlineRenderer {
                 AABB bounds = state.shape().bounds();
                 final double minY = bounds.minY;
                 final double height = bounds.maxY - bounds.minY;
+                final AABB shapeBounds = bounds;
+                final double flowPhase = (System.currentTimeMillis() % 3000) / 3000.0;
 
                 Vec3 cam = context.levelState().cameraRenderState.pos;
                 BlockPos pos = state.pos();
+                final Direction faceDir = "face".equals(mod.blockOutlineMode) ? targetFace(pos) : null;
                 double ox = pos.getX() - cam.x;
                 double oy = pos.getY() - cam.y;
                 double oz = pos.getZ() - cam.z;
@@ -95,6 +129,7 @@ public final class BlockOutlineRenderer {
                     poseStack.translate(ox, oy, oz);
                     var pose = poseStack.last();
                     state.shape().forAllEdges((x1, y1, z1, x2, y2, z2) -> {
+                        if (faceDir != null && !onFace(x1, y1, z1, x2, y2, z2, faceDir, shapeBounds)) return;
                         float dx = (float) (x2 - x1);
                         float dy = (float) (y2 - y1);
                         float dz = (float) (z2 - z1);
@@ -105,8 +140,8 @@ public final class BlockOutlineRenderer {
                             ny = dy / len;
                             nz = dz / len;
                         }
-                        float[] c1 = fadeColor(r, g, b, fr2, fg2, fb2, y1, minY, height, useFade);
-                        float[] c2 = fadeColor(r, g, b, fr2, fg2, fb2, y2, minY, height, useFade);
+                        float[] c1 = flowColor(r, g, b, fr2, fg2, fb2, y1, minY, height, useFade, flowPhase);
+                        float[] c2 = flowColor(r, g, b, fr2, fg2, fb2, y2, minY, height, useFade, flowPhase);
                         buffer.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(c1[0], c1[1], c1[2], a).setNormal(nx, ny, nz).setLineWidth(width);
                         buffer.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(c2[0], c2[1], c2[2], a).setNormal(nx, ny, nz).setLineWidth(width);
                     });

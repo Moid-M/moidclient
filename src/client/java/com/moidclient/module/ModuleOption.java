@@ -18,6 +18,7 @@ public final class ModuleOption {
     public final String hint;
     public final String placeholder;
     public final boolean nullable;
+    public final String reveals;
     public final Double min;
     public final Double max;
     public final Double step;
@@ -30,6 +31,7 @@ public final class ModuleOption {
         this.hint = null;
         this.placeholder = null;
         this.nullable = false;
+        this.reveals = null;
         this.min = null;
         this.max = null;
         this.step = null;
@@ -44,14 +46,37 @@ public final class ModuleOption {
         this.hint = hint;
         this.placeholder = placeholder;
         this.nullable = nullable;
+        this.reveals = base.reveals;
         this.min = min;
         this.max = max;
         this.step = step;
         this.options = options != null ? List.copyOf(options) : List.of();
     }
 
+    private ModuleOption(ModuleOption base, String reveals) {
+        this.key = base.key;
+        this.type = base.type;
+        this.label = base.label;
+        this.hint = base.hint;
+        this.placeholder = base.placeholder;
+        this.nullable = base.nullable;
+        this.reveals = reveals;
+        this.min = base.min;
+        this.max = base.max;
+        this.step = base.step;
+        this.options = base.options;
+    }
+
     public static ModuleOption bool(String key, String label) {
         return new ModuleOption(key, "boolean", label);
+    }
+
+    /**
+     * Toggle-button that reveals another option (e.g. a color picker) with
+     * animation while enabled. Renders like the background toggle.
+     */
+    public static ModuleOption revealToggle(String key, String label, String revealsKey) {
+        return new ModuleOption(new ModuleOption(key, "boolean", label), revealsKey);
     }
 
     public static ModuleOption slider(String key, String label, double min, double max, double step) {
@@ -96,6 +121,7 @@ public final class ModuleOption {
         if (hint != null) o.addProperty("hint", hint);
         if (placeholder != null) o.addProperty("placeholder", placeholder);
         if (nullable) o.addProperty("nullable", true);
+        if (reveals != null) o.addProperty("reveals", reveals);
         if (min != null) o.addProperty("min", min);
         if (max != null) o.addProperty("max", max);
         if (step != null) o.addProperty("step", step);

@@ -70,8 +70,9 @@ public class ConfigManager {
         public double fullbrightGamma = 12.0; // gamma when enabled (1-15)
         // block outline specific
         public double blockOutlineWidth = 2.0; // line thickness (1-5)
-        public boolean blockOutlineFade = false; // gradient to second color
+        public boolean blockOutlineFade = false; // animated gradient to second color
         public String blockOutlineColor2 = null; // null = solid color1
+        public String blockOutlineMode = "block"; // block (full outline) or face (targeted face only)
 
         public ModuleConfig() {}
         public ModuleConfig(boolean enabled, int x, int y) {
@@ -381,6 +382,10 @@ public class ConfigManager {
                 String c = data.get("blockOutlineColor2").getAsString();
                 if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.blockOutlineColor2 = c.isEmpty() ? null : c;
             }
+        }
+        if (data.has("blockOutlineMode") && !data.get("blockOutlineMode").isJsonNull()) {
+            String m = data.get("blockOutlineMode").getAsString();
+            if (m.equals("block") || m.equals("face")) cfg.blockOutlineMode = m;
         }
         save();
     }
