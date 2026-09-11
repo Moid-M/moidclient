@@ -21,8 +21,12 @@ public final class PerspectiveSkipManager {
 
     public static ModuleDef definition() {
         return new ModuleDef("perspectiveSkip", "Perspective Skip",
-                "F5 jumps first-person straight to front-facing, skipping third-person-back.",
-                "utility", false, List.of());
+                "F5 skips one third-person view - choose which one.",
+                "utility", false,
+                ModuleOption.list(
+                    ModuleOption.select("perspectiveSkipMode", "View to skip",
+                            java.util.List.of("skipBack", "skipFront"))
+                ));
     }
 
     public static void onTick(Minecraft mc, ConfigManager config) {
@@ -30,12 +34,23 @@ public final class PerspectiveSkipManager {
             if (mc == null || mc.options == null || config == null) return;
             ConfigManager.ModuleConfig mod = config.getModule("perspectiveSkip");
             if (mod == null || !mod.enabled) return;
+            boolean skipFront = "skipFront".equals(mod.perspectiveSkipMode);
             while (mc.options.keyTogglePerspective.consumeClick()) {
                 CameraType cur = mc.options.getCameraType();
-                if (cur.isFirstPerson()) {
-                    mc.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
+                if (skipFront) {
+                    // first-person <-> third-person-back, front-facing is skipped
+                    if (cur.isFirstPerson()) {
+                        mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+                    } else {
+                        mc.options.setCameraType(CameraType.FIRST_PERSON);
+                    }
                 } else {
-                    mc.options.setCameraType(CameraType.FIRST_PERSON);
+                    // first-person <-> front-facing, third-person-back is skipped
+                    if (cur.isFirstPerson()) {
+                        mc.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
+                    } else {
+                        mc.options.setCameraType(CameraType.FIRST_PERSON);
+                    }
                 }
             }
         } catch (Exception ignored) {}

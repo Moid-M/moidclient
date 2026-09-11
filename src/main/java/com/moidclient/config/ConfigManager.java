@@ -76,6 +76,8 @@ public class ConfigManager {
         public boolean blockOutlineFade = false; // animated gradient to second color
         public String blockOutlineColor2 = null; // null = solid color1
         public String blockOutlineMode = "block"; // block (full outline) or face (targeted face only)
+        // perspective skip specific
+        public String perspectiveSkipMode = "skipBack"; // skipBack (F5 skips third-person-back) or skipFront (F5 skips front-facing)
 
         public ModuleConfig() {}
         public ModuleConfig(boolean enabled, int x, int y) {
@@ -396,6 +398,10 @@ public class ConfigManager {
         if (data.has("blockOutlineMode") && !data.get("blockOutlineMode").isJsonNull()) {
             String m = data.get("blockOutlineMode").getAsString();
             if (m.equals("block") || m.equals("face")) cfg.blockOutlineMode = m;
+        }
+        if (data.has("perspectiveSkipMode") && !data.get("perspectiveSkipMode").isJsonNull()) {
+            String m = data.get("perspectiveSkipMode").getAsString();
+            if (m.equals("skipBack") || m.equals("skipFront")) cfg.perspectiveSkipMode = m;
         }
         save();
     }
