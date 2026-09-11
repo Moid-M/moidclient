@@ -1,0 +1,87 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = "Moid-Client"
+}
+
+repositories {
+    mavenCentral()
+}
+
+loom {
+    splitEnvironmentSourceSets()
+    mods {
+        "moidclient" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+configurations {
+    shadow
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    // Javalin + Jetty for embedded HTTP + WebSocket - shadowed into jar
+    // Do NOT include slf4j-simple - Minecraft already provides slf4j via log4j (including it causes StackOverflow via LoggedPrintStream)
+    shadow "io.javalin:javalin:6.3.0"
+    implementation "io.javalin:javalin:6.3.0"
+    // Gson is provided by Minecraft, no extra dep needed
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+def targetJavaVersion = 25
+if (JavaVersion.current().isJava9Compatible()) {
+    // keep 25 as target; compile options set explicitly
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    it.options.release = targetJavaVersion
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.toVersion(targetJavaVersion)
+    targetCompatibility = JavaVersion.toVersion(targetJavaVersion)
+}
+
+jar {
+    archiveBaseName = "Moid-Client"
+    archiveVersion = "v${project.version}"
+    archiveClassifier = ""
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+    // include web assets (already in resources)
+    // shadow Javalin + deps into jar so user doesn't need extra mods folder jars
+    from { configurations.shadow.collect { it.isDirectory() ? it : zipTree(it) } }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+publishing {
+    publications {
+        create("mavenJava", MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {}
+}

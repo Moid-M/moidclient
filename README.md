@@ -1,0 +1,103 @@
+﻿# Moid Client
+
+A lightweight, open-source Fabric client with a clickgui that runs entirely in your browser — no launcher, no login, no telemetry.
+
+![Moid Client dashboard demo](docs/demo.gif)
+
+## Why Moid?
+
+- **No launcher.** Just a `.jar` — drop it in your `mods` folder like any other Fabric mod.
+- **No account login.** Nothing to sign in to, nothing tied to your Microsoft/Mojang account beyond what Minecraft itself needs.
+- **No telemetry.** The client doesn't phone home. Don't take my word for it — the code is public, check for yourself.
+- **Open source (GPLv3).** Fork it, modify it, learn from it — just keep it open if you redistribute it.
+- **Browser-based clickgui.** The control panel is a local webpage (`localhost` only), not an in-game overlay — full CSS theming, no fighting Java rendering for a UI.
+
+## Supported Versions
+
+| Minecraft Version | Fabric Loader | Java | Status |
+|---|---|---|---|
+| 26.1 | 0.19.3 | 25 | ✅ Supported |
+| 26.2 | 0.19.3 | 25 | ✅ Supported |
+| 26.3 | 0.19.3 | 25 | ✅ Supported |
+
+Requires **Java 25** (Temurin 25+). Fabric Loader `0.19.3`, Loom `1.17`, Fabric API `0.145.1+26.1`.
+
+## Installation
+
+1. Install [Fabric Loader](https://fabricmc.net/use/) for your Minecraft version (26.1, 26.2 or 26.3).
+2. Download the latest `Moid-Client-v1.0.0.jar` from [Releases](../../releases).
+3. Drop it into your `.minecraft/mods` folder (with `fabric-api` if not already present).
+4. Launch Minecraft. Moid starts a local webserver — press `K` (or check console/chat) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
+
+Config at `.minecraft/config/moidclient.json` (`run/config/moidclient.json` in dev).
+
+## Modules
+
+<!--
+Keep this table as the single source of truth for what's implemented.
+Add a row per module when you ship it — don't let feature descriptions
+drift into the prose sections above.
+-->
+
+| Module | Category | Description | Status |
+|---|---|---|---|
+| FPS Counter | HUD | Displays current frames per second | ✅ |
+| Ping HUD | HUD | Displays current server ping | ✅ |
+| CPS Counter | HUD | Displays clicks per second | ✅ |
+| Keystrokes | HUD | Displays currently pressed movement/action keys | ✅ |
+| Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
+
+**Planned / in progress:**
+
+| Module | Category | Description |
+|---|---|---|
+| Block Outline | Visuals | Configurable outline on targeted block |
+| Custom Hitboxes | Visuals | Configurable size/color entity hitboxes |
+| Crosshair Customization | HUD | Custom crosshair styles, colors, sizes |
+| Double-F5 Perspective Skip | Utility | Skips the third-person-back view when toggling perspective, jumping straight from first-person to front-facing third-person (normally two separate F5 presses) |
+
+## How Moid Compares
+
+| Feature | Moid Client | Lunar Client | Dawn |
+|---|---|---|---|
+| Open source | ✅ | ❌ | ❌ (open-source libraries used, core client closed) |
+| No launcher / no separate login required | ✅ | ❌ | ⚠️ Jar option exists, but launcher is the primary product |
+| Browser-based clickgui, real CSS theming | ✅ | ❌ | ❌ (theming "on the way" per their site) |
+| No ad-partner data sharing | ✅ | ❌ Confirmed — shares/sells IP, geolocation, behavioral data per their own privacy policy | ❌ Confirmed — automatic telemetry + ad partner integration per their own privacy policy |
+| Cosmetic shop | ❌ None | ✅ Yes (capes/emotes, Lunar+) | ⚠️ "Coming soon" |
+| Bundled FPS/performance mods | ❌ Not built — see [Performance](#performance) | ✅ Marketed "2x+ boosted frames" | ✅ Rendering/network optimizations claimed |
+| Built-in module count | ❌ Handful so far | ✅ 65+ mods | ✅ 100+ mods |
+| Established community/Discord | ❌ Just starting out | ✅ Large, active | ✅ Active (inherited from Feather) |
+| Anticheat-trusted on major servers | ❌ Not yet | ✅ Widely whitelisted | ✅ Widely whitelisted |
+
+Sources: [lunarclient.com](https://lunarclient.com) and its [privacy policy](https://www.lunarclient.com/privacy); [dawn.gg](https://dawn.gg) and its [privacy policy](https://dawn.gg/privacy), current as of publishing. Check the linked pages yourself — policies change.
+
+## Performance
+
+Moid does not include its own rendering/FPS-optimization mods — that space is already well served by dedicated projects like [Sodium](https://modrinth.com/mod/sodium) and its ecosystem (Iris, Lithium, etc.), and duplicating that work isn't a priority.
+
+Moid's performance goals are scoped to:
+1. Not degrading your game's performance — the client itself stays lightweight.
+2. Working alongside Sodium and similar optimization mods rather than conflicting with them. Tested with Sodium `0.6` on 26.1.
+
+## Building from Source
+
+```bash
+git clone https://github.com/moid-m/moidclient.git
+cd moidclient
+./gradlew build # requires Java 25
+```
+
+Built jar will be in `build/libs/Moid-Client-v1.0.0.jar`.
+
+## Contributing
+
+Issues and pull requests are welcome. Please keep new modules consistent with the existing module structure (see `com.moidclient.hud.*` / `visuals/*` + `ConfigManager.ModuleConfig`).
+
+## License
+
+GPLv3 — see [LICENSE](LICENSE). Forks must remain open source under the same license.
+
+## Disclaimer
+
+Not affiliated with Mojang, Microsoft, or any Minecraft server. Use on servers at your own discretion — always check a server's rules regarding client-side modifications.

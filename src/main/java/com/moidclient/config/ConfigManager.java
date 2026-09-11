@@ -1,0 +1,389 @@
+package com.moidclient.config;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import net.fabricmc.loader.api.FabricLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Clean JSON configuration stored at .minecraft/config/MoidClient.json
+ * Holds accent color, HUD module states, positions, scale, opacity.
+ */
+public class ConfigManager {
+    private static final Logger LOGGER = LoggerFactory.getLogger("MoidClient/Config");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final String FILE_NAME = "moidclient.json";
+
+    // Default accent presets
+    public static final String DEFAULT_ACCENT = "#8B5CF6";
+
+    private File configFile;
+    private JsonObject root;
+
+    // In-memory representation for convenience
+    private final Map<String, ModuleConfig> modules = new LinkedHashMap<>();
+    private String accentColor = DEFAULT_ACCENT;
+    private String themeTextColor = "#F9FAFB";
+
+    public static class ModuleConfig {
+        public boolean enabled = false;
+        public int x = 10;
+        public int y = 10;
+        public double scale = 1.0;
+        public double opacity = 1.0; // text opacity
+        public double backgroundOpacity = 0.85; // independent background opacity
+        public String color = null; // legacy
+        // ping specific
+        public boolean background = false;
+        public String backgroundColor = "#1A1B20";
+        public String textColor = null; // null = auto (ping color)
+        public String format = "Ping: {ping} ms"; // placeholder {ping}
+        public boolean shadow = true;
+        // fps specific
+        public String fpsMode = "stable"; // "fast" (per-frame) or "stable" (once/sec)
+        public boolean fpsDynamicColor = false; // false=use textColor/white, true=gradient 30-90
+        // cps specific
+        public String cpsMode = "both"; // both / left / right
+        public boolean cpsDynamicColor = false;
+        // keystrokes specific - Feather/Lunar-like
+        public boolean keystrokesShowMouse = true;
+        public boolean keystrokesShowSpace = true;
+        public boolean keystrokesShowShift = true;
+        public boolean keystrokesShowW = true;
+        public boolean keystrokesShowA = true;
+        public boolean keystrokesShowS = true;
+        public boolean keystrokesShowD = true;
+        public boolean keystrokesShowCps = false; // show CPS inside LMB/RMB
+        public int keystrokesGap = 2; // 0-10 px
+        public boolean keystrokesOutline = true;
+        public String keystrokesPressedColor = null; // null = accent
+        // fullbright specific
+        public double fullbrightGamma = 12.0; // gamma when enabled (1-15)
+
+        public ModuleConfig() {}
+        public ModuleConfig(boolean enabled, int x, int y) {
+            this.enabled = enabled;
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    public ConfigManager() {
+        File configDir = FabricLoader.getInstance().getConfigDir().toFile();
+        if (!configDir.exists()) configDir.mkdirs();
+        this.configFile = new File(configDir, FILE_NAME);
+        loadOrCreate();
+    }
+
+    // For testing / headless without FabricLoader
+    public ConfigManager(File file) {
+        this.configFile = file;
+        loadOrCreate();
+    }
+
+    private void loadOrCreate() {
+        // migrate from old MoidClient.json if needed
+        if (!configFile.exists()) {
+            File old = new File(configFile.getParentFile(), "MoidClient.json");
+            if (old.exists()) {
+                try (FileReader r = new FileReader(old)) {
+                    JsonObject j = JsonParser.parseReader(r).getAsJsonObject();
+                    this.root = j;
+                    if (j.has("accentColor")) {
+                        String c = j.get("accentColor").getAsString();
+                        if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
+                    }
+                    if (j.has("themeTextColor")) {
+                        String c = j.get("themeTextColor").getAsString();
+                        if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+                    } else if (j.has("textColor")) {
+                        String c = j.get("textColor").getAsString();
+                        if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+                    }
+                    if (j.has("modules") && j.get("modules").isJsonObject()) {
+                        JsonObject mods = j.getAsJsonObject("modules");
+                        for (var e : mods.entrySet()) {
+                            ModuleConfig cfg = GSON.fromJson(e.getValue(), ModuleConfig.class);
+                            modules.put(e.getKey(), cfg);
+                        }
+                    }
+                    ensureDefaults(false);
+                    // fill missing ping defaults
+                    fillMissingDefaults();
+                    save();
+                    LOGGER.info("[MoidClient] Migrated config from {}", old.getAbsolutePath());
+                    return;
+                } catch (Exception e) { LOGGER.warn("[MoidClient] Migration failed", e); }
+            }
+            createDefaults();
+            save();
+            LOGGER.info("[MoidClient] Created default config at {}", configFile.getAbsolutePath());
+            return;
+        }
+        try (FileReader reader = new FileReader(configFile)) {
+            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+            this.root = json;
+            // accent - validated
+            if (json.has("accentColor")) {
+                String c = json.get("accentColor").getAsString();
+                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
+            }
+            if (json.has("themeTextColor")) {
+                String c = json.get("themeTextColor").getAsString();
+                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+            } else if (json.has("textColor")) {
+                String c = json.get("textColor").getAsString();
+                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+            }
+            // modules
+            if (json.has("modules") && json.get("modules").isJsonObject()) {
+                JsonObject mods = json.getAsJsonObject("modules");
+                for (var entry : mods.entrySet()) {
+                    ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
+                    modules.put(entry.getKey(), cfg);
+                }
+            }
+            // ensure all expected modules exist
+            ensureDefaults(false);
+            fillMissingDefaults();
+            LOGGER.info("[MoidClient] Loaded config from {}", configFile.getAbsolutePath());
+        } catch (Exception e) {
+            LOGGER.error("[MoidClient] Failed to load config, recreating defaults", e);
+            createDefaults();
+            save();
+        }
+    }
+
+    private void createDefaults() {
+        root = new JsonObject();
+        accentColor = DEFAULT_ACCENT;
+        modules.clear();
+        ensureDefaults(true);
+    }
+
+    /**
+     * Ensure all HUD modules exist. If `overwrite` false, only add missing.
+     */
+    private void ensureDefaults(boolean overwrite) {
+        registerDefault("ping", new ModuleConfig(false, 10, 50), overwrite);
+        registerDefault("fpsCounter", new ModuleConfig(true, 10, 10), overwrite);
+        registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
+        registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
+        registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
+        // removed: testModule, armorStatus, fpsBoost (not implemented)
+    }
+
+    private void registerDefault(String id, ModuleConfig cfg, boolean overwrite) {
+        if (overwrite || !modules.containsKey(id)) {
+            modules.put(id, cfg);
+        }
+    }
+
+    private void fillMissingDefaults() {
+        // remove old unused modules (keep cpsCounter now implemented)
+        modules.keySet().removeIf(k -> k.equals("testModule") || k.equals("armorStatus") || k.equals("fpsBoost"));
+        for (var e : modules.entrySet()) {
+            ModuleConfig c = e.getValue();
+            if (c.backgroundColor == null) c.backgroundColor = "#1A1B20";
+            if (c.backgroundOpacity == 0) {
+                // migrate from old opacity*0.85 or default 0.85
+                c.backgroundOpacity = c.opacity > 0 ? Math.max(0.2, Math.min(1, c.opacity * 0.85)) : 0.85;
+            }
+            c.backgroundOpacity = Math.max(0, Math.min(1, c.backgroundOpacity));
+            c.opacity = Math.max(0.2, Math.min(1, c.opacity == 0 ? 1.0 : c.opacity));
+            if (c.fpsMode == null || (!c.fpsMode.equals("fast") && !c.fpsMode.equals("stable"))) {
+                c.fpsMode = "stable";
+            }
+            if (c.cpsMode == null || (!c.cpsMode.equals("both") && !c.cpsMode.equals("left") && !c.cpsMode.equals("right"))) {
+                c.cpsMode = "both";
+            }
+            // migrate fps/cps format from old ping placeholder
+            if (e.getKey().equals("fpsCounter") && c.format != null && c.format.contains("{ping}")) {
+                c.format = "FPS: {fps}";
+            }
+            if (e.getKey().equals("cpsCounter") && c.format != null && c.format.contains("{ping}")) {
+                c.format = "CPS: {left} | {right}";
+            }
+            if (c.format == null) {
+                if (e.getKey().equals("ping")) c.format = "Ping: {ping} ms";
+                else if (e.getKey().equals("fpsCounter")) c.format = "FPS: {fps}";
+                else if (e.getKey().equals("cpsCounter")) c.format = "CPS: {left} | {right}";
+                else c.format = "{value}";
+            }
+            // fullbright gamma 1-15
+            if (e.getKey().equals("fullbright")) {
+                if (c.fullbrightGamma == 0) c.fullbrightGamma = 12.0;
+                c.fullbrightGamma = Math.max(1.0, Math.min(15.0, c.fullbrightGamma));
+            }
+        }
+        ModuleConfig ping = modules.get("ping");
+        if (ping != null && ping.format == null) ping.format = "Ping: {ping} ms";
+        ModuleConfig fps = modules.get("fpsCounter");
+        if (fps != null) {
+            if (fps.format == null) fps.format = "FPS: {fps}";
+            if (fps.fpsMode == null) fps.fpsMode = "stable";
+        }
+        ModuleConfig cps = modules.get("cpsCounter");
+        if (cps != null) {
+            if (cps.format == null) cps.format = "CPS: {left} | {right}";
+            if (cps.cpsMode == null) cps.cpsMode = "both";
+        }
+        ModuleConfig fb = modules.get("fullbright");
+        if (fb != null && fb.fullbrightGamma == 0) fb.fullbrightGamma = 12.0;
+    }
+
+    public synchronized void save() {
+        try {
+            JsonObject out = new JsonObject();
+            out.addProperty("accentColor", accentColor);
+            out.addProperty("themeTextColor", themeTextColor);
+            JsonObject mods = new JsonObject();
+            for (Map.Entry<String, ModuleConfig> e : modules.entrySet()) {
+                mods.add(e.getKey(), GSON.toJsonTree(e.getValue()));
+            }
+            out.add("modules", mods);
+            // preserve extra fields like performance if needed
+            if (root != null) {
+                for (var k : root.keySet()) {
+                    if (!out.has(k) && !k.equals("modules") && !k.equals("accentColor") && !k.equals("themeTextColor")) {
+                        out.add(k, root.get(k));
+                    }
+                }
+            }
+            this.root = out;
+            // atomic write: write to tmp then rename
+            File tmp = new File(configFile.getParentFile(), configFile.getName() + ".tmp");
+            try (FileWriter writer = new FileWriter(tmp)) {
+                GSON.toJson(out, writer);
+            }
+            //noinspection ResultOfMethodCallIgnored
+            tmp.renameTo(configFile);
+        } catch (Exception e) {
+            LOGGER.error("[MoidClient] Failed to save config", e);
+        }
+    }
+
+    public String getAccentColor() {
+        return accentColor;
+    }
+
+    public void setAccentColor(String color) {
+        if (color != null && color.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
+            this.accentColor = color;
+            save();
+        }
+    }
+
+    public String getThemeTextColor() { return themeTextColor; }
+    public void setThemeTextColor(String color) {
+        if (color != null && color.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
+            this.themeTextColor = color;
+            save();
+        }
+    }
+
+    public Map<String, ModuleConfig> getModules() {
+        return modules;
+    }
+
+    public ModuleConfig getModule(String id) {
+        return modules.get(id);
+    }
+
+    public JsonObject toJson() {
+        JsonObject out = new JsonObject();
+        out.addProperty("accentColor", accentColor);
+        out.addProperty("themeTextColor", themeTextColor);
+        JsonObject mods = new JsonObject();
+        for (Map.Entry<String, ModuleConfig> e : modules.entrySet()) {
+            mods.add(e.getKey(), GSON.toJsonTree(e.getValue()));
+        }
+        out.add("modules", mods);
+        return out;
+    }
+
+    public void updateModule(String id, JsonObject data) {
+        ModuleConfig cfg = modules.get(id);
+        if (cfg == null) {
+            cfg = new ModuleConfig();
+            modules.put(id, cfg);
+        }
+        if (data.has("enabled")) cfg.enabled = data.get("enabled").getAsBoolean();
+        if (data.has("x")) cfg.x = data.get("x").getAsInt();
+        if (data.has("y")) cfg.y = data.get("y").getAsInt();
+        if (data.has("scale")) cfg.scale = data.get("scale").getAsDouble();
+        if (data.has("opacity")) cfg.opacity = data.get("opacity").getAsDouble();
+        if (data.has("backgroundOpacity")) cfg.backgroundOpacity = data.get("backgroundOpacity").getAsDouble();
+        if (data.has("color") && !data.get("color").isJsonNull()) cfg.color = data.get("color").getAsString();
+        if (data.has("background")) cfg.background = data.get("background").getAsBoolean();
+        if (data.has("backgroundColor") && !data.get("backgroundColor").isJsonNull()) cfg.backgroundColor = data.get("backgroundColor").getAsString();
+        if (data.has("textColor")) {
+            if (data.get("textColor").isJsonNull()) cfg.textColor = null;
+            else cfg.textColor = data.get("textColor").getAsString();
+        }
+        if (data.has("format") && !data.get("format").isJsonNull()) cfg.format = data.get("format").getAsString();
+        if (data.has("shadow")) cfg.shadow = data.get("shadow").getAsBoolean();
+        if (data.has("fpsMode") && !data.get("fpsMode").isJsonNull()) {
+            String m = data.get("fpsMode").getAsString();
+            if (m.equals("fast") || m.equals("stable")) cfg.fpsMode = m;
+        }
+        if (data.has("fpsDynamicColor")) cfg.fpsDynamicColor = data.get("fpsDynamicColor").getAsBoolean();
+        if (data.has("cpsMode") && !data.get("cpsMode").isJsonNull()) {
+            String m = data.get("cpsMode").getAsString();
+            if (m.equals("both") || m.equals("left") || m.equals("right")) cfg.cpsMode = m;
+        }
+        if (data.has("cpsDynamicColor")) cfg.cpsDynamicColor = data.get("cpsDynamicColor").getAsBoolean();
+        if (data.has("keystrokesShowMouse")) cfg.keystrokesShowMouse = data.get("keystrokesShowMouse").getAsBoolean();
+        if (data.has("keystrokesShowSpace")) cfg.keystrokesShowSpace = data.get("keystrokesShowSpace").getAsBoolean();
+        if (data.has("keystrokesShowShift")) cfg.keystrokesShowShift = data.get("keystrokesShowShift").getAsBoolean();
+        if (data.has("keystrokesShowW")) cfg.keystrokesShowW = data.get("keystrokesShowW").getAsBoolean();
+        if (data.has("keystrokesShowA")) cfg.keystrokesShowA = data.get("keystrokesShowA").getAsBoolean();
+        if (data.has("keystrokesShowS")) cfg.keystrokesShowS = data.get("keystrokesShowS").getAsBoolean();
+        if (data.has("keystrokesShowD")) cfg.keystrokesShowD = data.get("keystrokesShowD").getAsBoolean();
+        if (data.has("keystrokesShowCps")) cfg.keystrokesShowCps = data.get("keystrokesShowCps").getAsBoolean();
+        if (data.has("keystrokesGap")) cfg.keystrokesGap = data.get("keystrokesGap").getAsInt();
+        if (data.has("keystrokesOutline")) cfg.keystrokesOutline = data.get("keystrokesOutline").getAsBoolean();
+        if (data.has("keystrokesPressedColor") && !data.get("keystrokesPressedColor").isJsonNull()) cfg.keystrokesPressedColor = data.get("keystrokesPressedColor").getAsString();
+        if (data.has("fullbrightGamma")) cfg.fullbrightGamma = data.get("fullbrightGamma").getAsDouble();
+        save();
+    }
+
+    public void importFromJson(JsonObject json) {
+        if (json.has("accentColor")) {
+            String c = json.get("accentColor").getAsString();
+            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
+        }
+        if (json.has("themeTextColor")) {
+            String c = json.get("themeTextColor").getAsString();
+            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+        } else if (json.has("textColor")) {
+            String c = json.get("textColor").getAsString();
+            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+        }
+        if (json.has("modules") && json.get("modules").isJsonObject()) {
+            JsonObject mods = json.getAsJsonObject("modules");
+            modules.clear();
+            for (var entry : mods.entrySet()) {
+                ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
+                modules.put(entry.getKey(), cfg);
+            }
+        }
+        ensureDefaults(false);
+        fillMissingDefaults();
+        this.root = json;
+        save();
+    }
+
+    public File getConfigFile() {
+        return configFile;
+    }
+}

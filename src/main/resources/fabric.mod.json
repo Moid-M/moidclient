@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "moidclient",
+  "version": "${version}",
+  "name": "Moid Client",
+  "description": "Ultra-lightweight utility client with browser-based Web GUI (Feather/Lunar-like, no ClickGUI).",
+  "authors": ["Moid"],
+  "contact": {
+    "homepage": "https://github.com/moid-m/moidclient",
+    "sources": "https://github.com/moid-m/moidclient"
+  },
+  "license": "GPL-3.0-only",
+  "icon": "assets/moidclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.moidclient.ClientMod"
+    ]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": ">=26.1 <26.4",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

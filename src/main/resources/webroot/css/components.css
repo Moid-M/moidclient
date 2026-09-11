@@ -1,0 +1,43 @@
+/* cards with spring - initial only */
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  transition: border-color 280ms var(--ease-smooth), transform 320ms var(--ease-spring), background 220ms var(--ease-smooth), box-shadow 280ms var(--ease-smooth), opacity 280ms var(--ease-smooth);
+  will-change: transform, opacity;
+}
+.card.enter{ animation: cardIn 420ms var(--ease-out) both; }
+@keyframes cardIn{ from{ opacity:0; transform: translateY(8px) scale(0.98); } to{ opacity:1; transform: translateY(0) scale(1); } }
+.card:hover{ border-color:#343748; background: color-mix(in srgb, var(--hover) 45%, var(--card)); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.15); }
+.card.focused{ grid-column: 1 / -1; border-color: color-mix(in srgb, var(--accent) 28%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), 0 16px 40px rgba(0,0,0,0.35), 0 0 28px color-mix(in srgb, var(--accent) 12%, transparent); transform: scale(1.01); animation: focusIn 380ms var(--ease-spring) both; }
+@keyframes focusIn{ from{ opacity:0.8; transform: scale(0.97); } to{ opacity:1; transform: scale(1.01); } }
+.card.dimmed{ opacity:0; transform: scale(0.96) translateY(4px); pointer-events:none; filter: blur(2px); }
+
+.btn-accent{ background:var(--accent); color:white; border-radius:999px; transition: filter 200ms var(--ease-smooth), transform 220ms var(--ease-spring), box-shadow 280ms var(--ease-smooth); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0% , transparent); }
+.btn-accent:hover{filter:brightness(1.08); transform: translateY(-1px); box-shadow:0 6px 18px color-mix(in srgb, var(--accent) 35% , transparent)}
+.btn-accent:active{transform: scale(0.98);}
+
+.toggle{ width:46px;height:28px;border-radius:999px;background:#2A2C34;position:relative;transition: background 280ms var(--ease-smooth), box-shadow 220ms var(--ease-smooth);cursor:pointer;flex-shrink:0; }
+.toggle.active{background:var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent)}
+.toggle-dot{ position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:999px;background:white;transition: transform 320ms var(--ease-spring), box-shadow 200ms var(--ease-smooth);box-shadow:0 2px 6px rgba(0,0,0,.3) }
+.toggle.active .toggle-dot{transform:translateX(18px)}
+.toggle:active .toggle-dot{ transform: scale(0.92) translateX(0); }
+.toggle.active:active .toggle-dot{ transform: scale(0.92) translateX(18px); }
+
+.sidebar-item{ display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:999px;color:var(--text-muted);cursor:pointer;transition: background 220ms var(--ease-smooth), color 200ms var(--ease-smooth), transform 200ms var(--ease-out), border-color 200ms; font-size:13.5px;font-weight:500; }
+.sidebar-item:hover{background:var(--hover);color:var(--text-bright); transform: translateX(1px)}
+.sidebar-item.active{background:color-mix(in srgb, var(--accent) 14% , transparent); color:var(--text-bright); border:1px solid color-mix(in srgb, var(--accent) 22%, transparent); transform: translateX(0)}
+
+.modal-backdrop{backdrop-filter:blur(10px);background:rgba(0,0,0,.62); animation: fadeIn 220ms var(--ease-smooth)}
+@keyframes fadeIn{ from{opacity:0} to{opacity:1} }
+.glow{box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 28px color-mix(in srgb, var(--accent) 16%, transparent); animation: glowIn 520ms var(--ease-out)}
+@keyframes glowIn{ from{ transform: scale(0.97); opacity:0 } to{ transform: scale(1); opacity:1 } }
+@keyframes pulse-dot{0%,100%{opacity:1; transform: scale(1)}50%{opacity:.6; transform: scale(0.92)}}
+.dot-pulse{animation:pulse-dot 1.8s infinite}
+
+button[class*="rounded-"], .btn-accent, .field-input, .focus-bar{ border-radius: 999px !important; }
+.card{ border-radius: 16px !important; }
+.icon-box, .sv-box{ border-radius: 12px !important; }
+.sv-box{ border-radius: 16px !important; }
+.hue-bar{ border-radius: 999px !important; }
+.number-wrap{ border-radius: 999px !important; }

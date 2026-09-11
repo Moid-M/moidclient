@@ -1,0 +1,25 @@
+/build/
+/out/
+.gradle/
+remappedSrc/
+*.log
+.idea/
+*.iml
+.minecraft/
+run/
+logs/
+fabric.mod.json.bak
+# build artifacts
+*.jar
+!libs/*.jar
+!gradle/wrapper/gradle-wrapper.jar
+# local secrets — never commit
+github-token.txt
+*token*.txt
+*.bak
+*.zip
+src-backup-*.zip
+.vscode/
+# OS
+.DS_Store
+Thumbs.db

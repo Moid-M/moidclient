@@ -1,0 +1,20 @@
+.icon-box{ color:var(--text-muted); transition: color 220ms var(--ease-smooth), border-color 220ms, background 220ms, transform 220ms var(--ease-spring); }
+.card:hover .icon-box{ color:var(--text-bright); border-color: #343748 !important; transform: scale(1.05)}
+.card.focused .icon-box{ color:var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)) !important; background: color-mix(in srgb, var(--accent) 10%, var(--bg)) !important; transform: scale(1.08)}
+.card-header{ cursor:pointer; border-radius:12px; padding:2px 0; transition: transform 160ms var(--ease-out); }
+.card:hover .card-title{ color: var(--accent) !important; }
+.card-header:active{ transform: scale(0.99); }
+.card-header:hover{ background: transparent; }
+
+.drawer{ overflow:hidden; transition: max-height 420ms var(--ease-out), opacity 320ms var(--ease-smooth), transform 360ms var(--ease-spring); max-height:0; opacity:0; transform: translateY(-6px); }
+.drawer.open{ max-height: 420px; opacity:1; transform: translateY(0); }
+
+.focus-bar{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; margin:-4px -4px 6px -4px; border-radius:999px; background: var(--bg); border:1px solid var(--border); animation: slideDown 300ms var(--ease-out); }
+@keyframes slideDown{ from{ opacity:0; transform: translateY(-6px)} to{ opacity:1; transform: translateY(0)} }
+
+.grid-fade{ transition: opacity 260ms var(--ease-smooth), filter 260ms; }
+
+.tab-panel{ animation: tabIn 340ms var(--ease-out) both; }
+@keyframes tabIn{ from{ opacity:0; transform: translateY(8px); filter: blur(2px); } to{ opacity:1; transform: translateY(0); filter: blur(0); } }
+.tab-panel.out{ animation: tabOut 220ms var(--ease-smooth) both; }
+@keyframes tabOut{ from{ opacity:1; transform: translateY(0); } to{ opacity:0; transform: translateY(-6px); } }
