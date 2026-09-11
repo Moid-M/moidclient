@@ -91,11 +91,12 @@ public class ServerManager {
             ws.onConnect(ctx -> network.onConnect(ctx));
             ws.onClose(ctx -> network.onClose(ctx));
             ws.onMessage(ctx -> network.onMessage(ctx, ctx.message()));
-        })          .get("/api/config", ctx -> ctx.json(config.toJson()))
+        })          .get("/api/config", ctx -> ctx.contentType("application/json").result(config.toJson().toString()))
           .get("/api/modules", ctx -> {
               if (moduleDefs != null) {
                   try {
-                      ctx.json(moduleDefs.get());
+                      // NOTE: serialize Gson manually - ctx.json() uses Jackson and mangles Gson trees.
+                      ctx.contentType("application/json").result(moduleDefs.get().toString());
                       return;
                   } catch (Exception e) {
                       LOGGER.warn("[MoidClient] Failed to serialize module defs", e);
