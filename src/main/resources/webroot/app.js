@@ -8,16 +8,20 @@ const PRESETS = [
   { name: 'Flame Crimson', hex: '#EF4444' },
   { name: 'Sunset Amber', hex: '#F59E0B' },
 ];
+// Generic icon library keyed by icon NAME (from each module's definition()).
+// No module ids here - iconFor() resolves via the served metadata.
 const ICONS = {
-  fpsCounter:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2-5 4 10 2-6h5"/></svg>`,
-  ping:        `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M8.5 12a3.5 3.5 0 0 1 7 0" stroke-linecap="round"/><path d="M6 12a6 6 0 0 1 12 0" stroke-linecap="round" opacity="0.85"/><path d="M3.5 12a8.5 8.5 0 0 1 17 0" stroke-linecap="round" opacity="0.45"/></svg>`,
-  cpsCounter:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="16" rx="3"/><path d="M12 7v4"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>`,
-  keystrokes:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M8 11h.01M12 11h.01M16 11h.01M8 15h8"/></svg>`,
-  fullbright:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`,
-  blockOutline: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 11L4 6.5M12 11l8-4.5M12 11v9"/></svg>`,
+  activity: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2-5 4 10 2-6h5"/></svg>`,
+  signal:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M8.5 12a3.5 3.5 0 0 1 7 0" stroke-linecap="round"/><path d="M6 12a6 6 0 0 1 12 0" stroke-linecap="round" opacity="0.85"/><path d="M3.5 12a8.5 8.5 0 0 1 17 0" stroke-linecap="round" opacity="0.45"/></svg>`,
+  mouse:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="16" rx="3"/><path d="M12 7v4"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>`,
+  keyboard: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M8 11h.01M12 11h.01M16 11h.01M8 15h8"/></svg>`,
+  sun:      `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>`,
+  box:      `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 11L4 6.5M12 11l8-4.5M12 11v9"/></svg>`,
+  switch:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 17h11"/><path d="M15 3l4 4-4 4M15 13l4 4-4 4"/></svg>`,
+  target:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`,
 };
 const FALLBACK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>`;
-function iconFor(id){ return ICONS[id] || FALLBACK_ICON; }
+function iconFor(id){ const m=MODULES_META[id]; return (m && ICONS[m.icon]) || FALLBACK_ICON; }
 // Module definitions come from the game via GET /api/modules (single source of
 // truth = each module's definition() in Java). Rendered generically below.
 let MODULES_META = {};
@@ -36,6 +40,8 @@ async function loadModuleDefs(){
         name: d.name || d.id,
         desc: d.description || '',
         cat: d.category || 'hud',
+        icon: d.icon || d.id,
+        editor: !!d.editor,
         overlay: !!d.overlay,
         options: Array.isArray(d.options) ? d.options : [],
       };
@@ -63,7 +69,7 @@ let searchQuery="";
 let windowSize={scaledWidth:640, scaledHeight:360, width:1920, height:1080, guiScale:3};
 let editorSelectedId=null;
 let livePing=null, liveFps=null, liveCpsLeft=null, liveCpsRight=null;
-window.liveKeys={w:false,a:false,s:false,d:false,space:false,shift:false,lmb:false,rmb:false};
+window.modulePreviews={};
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 function hexToHsv(hex){
   hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
@@ -187,10 +193,8 @@ function handleLiveStats(data){
   if(data.fps!=null) liveFps=data.fps;
   if(data.cpsLeft!=null) liveCpsLeft=data.cpsLeft;
   if(data.cpsRight!=null) liveCpsRight=data.cpsRight;
-  if(data.keys){
-    window.liveKeys.w=!!data.keys.w; window.liveKeys.a=!!data.keys.a; window.liveKeys.s=!!data.keys.s; window.liveKeys.d=!!data.keys.d;
-    window.liveKeys.space=!!data.keys.space; window.liveKeys.shift=!!data.keys.shift; window.liveKeys.lmb=!!data.keys.lmb; window.liveKeys.rmb=!!data.keys.rmb;
-  }
+  // server-computed editor previews - the dashboard renders these verbatim
+  if(data.previews) window.modulePreviews=data.previews;
   const el=document.querySelector('#liveStatsLabel');
   if(el) {
     let txt='Ping: '+(livePing??'-')+' ms - FPS: '+(liveFps??'-');
@@ -201,66 +205,10 @@ function handleLiveStats(data){
   else {
     document.querySelectorAll('.hud-preview-item').forEach(el=>{
       const id=el.dataset.id; if(!id) return;
-      el.textContent=getEditorText(id);
+      const pv=(window.modulePreviews||{})[id];
+      if(pv && pv.text!=null) el.textContent=pv.text;
     });
   }
-}
-function getEditorText(id){
-  const mod=config.modules[id]||{};
-  const meta=MODULES_META[id];
-  if(id==='ping'){
-    const fmt=mod.format||'Ping: {ping} ms';
-    const v= livePing ?? 42;
-    return fmt.replace('{ping}', String(v)).replace('{value}', String(v)).replace('{fps}', String(v));
-  }
-  if(id==='fpsCounter'){
-    const fmt=mod.format||'FPS: {fps}';
-    const v= liveFps ?? 144;
-    return fmt.replace('{fps}', String(v)).replace('{value}', String(v)).replace('{ping}', String(v));
-  }
-  if(id==='cpsCounter'){
-    const mode = mod.cpsMode || 'both';
-    let fmt = mod.format || (mode==='left' ? 'CPS: {left}' : mode==='right' ? 'CPS: {right}' : 'CPS: {left} | {right}');
-    if(fmt.includes('{ping}')) fmt = mode==='left' ? 'CPS: {left}' : mode==='right' ? 'CPS: {right}' : 'CPS: {left} | {right}';
-    let displayFmt = fmt;
-    if(mode==='left'){
-      displayFmt = displayFmt.replace(/\s*\|\s*\{right\}/g, '').replace(/\{right\}\s*\|\s*/g, '').replace('{right}','').replace('{r}','');
-    } else if(mode==='right'){
-      displayFmt = displayFmt.replace(/\s*\|\s*\{left\}/g, '').replace(/\{left\}\s*\|\s*/g, '').replace('{left}','').replace('{l}','');
-    }
-    const left=8, right=12;
-    let txt = displayFmt.replace('{left}',left).replace('{right}',right).replace('{cps}',Math.max(left,right)).replace('{l}',left).replace('{r}',right).replace('{value}',left).replace('{ping}',left);
-    txt = txt.replace(/\s*\|\s*\|/g, ' | ').replace(/\s*\|\s*$/,'').trim();
-    if((left>10||right>10) && (fmt==='CPS: {left} | {right}'||fmt==='CPS: {cps}')) txt+=' 🔥';
-    return txt;
-  }
-  if(id==='keystrokes'){
-    const showW = mod.keystrokesShowW!==false, showA = mod.keystrokesShowA!==false, showS = mod.keystrokesShowS!==false, showD = mod.keystrokesShowD!==false;
-    const showL = mod.keystrokesShowMouse!==false, showR = mod.keystrokesShowMouse!==false;
-    const showSpace = mod.keystrokesShowSpace!==false, showShift = mod.keystrokesShowShift!==false;
-    let parts=[];
-    if(showW) parts.push('W');
-    if(showA) parts.push('A');
-    if(showS) parts.push('S');
-    if(showD) parts.push('D');
-    let txt = parts.length ? parts.join(' ') : '-';
-    if(showL || showR){
-      const l = liveCpsLeft ?? 0, r = liveCpsRight ?? 0;
-      if(mod.keystrokesShowCps){
-        if(showL && showR) txt += `  L${l} R${r}`;
-        else if(showL) txt += `  L${l}`;
-        else if(showR) txt += `  R${r}`;
-      } else {
-        if(showL && showR) txt += '  L R';
-        else if(showL) txt += '  L';
-        else if(showR) txt += '  R';
-      }
-    }
-    if(showSpace) txt += ' _';
-    if(showShift) txt += ' ^';
-    return txt;
-  }
-  return meta?meta.name:id;
 }
 function syncEditorItems(){
   try{
@@ -268,9 +216,9 @@ function syncEditorItems(){
   if(!outer) return;
   outer.querySelectorAll('.hud-preview-item').forEach(e=>e.remove());
   const enabledIds=MODULE_ORDER.filter(id=>{
-    const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.cat==='hud';
+    const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.editor;
   });
-  const hudKeys=MODULE_ORDER.filter(k=>MODULES_META[k] && MODULES_META[k].cat==='hud');
+  const hudKeys=MODULE_ORDER.filter(k=>MODULES_META[k] && MODULES_META[k].editor);
   const idsToShow = enabledIds.length ? enabledIds : hudKeys.slice(0,2);
   const outers=[outer, ...[...document.querySelectorAll('.hudPreviewOuter')].filter(o=>o!==outer)];
   for(const box of outers){
@@ -281,29 +229,16 @@ function syncEditorItems(){
   idsToShow.forEach(id=>{
     const mod=config.modules[id]||{x:10,y:10,scale:1,opacity:1, background:false, backgroundColor:'#1A1B20', textColor:null};
     const scale=mod.scale||1;
-    const isKeystrokes = id==='keystrokes';
-    let txt=getEditorText(id);
-    if(isKeystrokes && mod.keystrokesShowCps){
-      const l = liveCpsLeft ?? 8, r = liveCpsRight ?? 12;
-      txt = `WASD\nL${l} R${r}`;
-    }
+    const pv=(window.modulePreviews||{})[id]||null;
+    const txt=pv&&pv.text!=null ? pv.text : (MODULES_META[id]?.name||id);
+    const isKeysBox = !!(pv && pv.kind==='keystrokes');
     const el=document.createElement('div');
     el.className='hud-preview-item absolute select-none cursor-grab active:cursor-grabbing flex items-center justify-center text-xs font-medium whitespace-nowrap border';
     el.dataset.id=id;
     const bgEnabled = !!mod.background;
-    if(isKeystrokes){
-      const gap = Math.max(0, Math.min(10, mod.keystrokesGap ?? 2));
-      const keySize=18;
-      let estH = 0;
-      if(mod.keystrokesShowW!==false) estH += keySize + gap;
-      if(mod.keystrokesShowA!==false || mod.keystrokesShowS!==false || mod.keystrokesShowD!==false) estH += keySize + gap;
-      if(mod.keystrokesShowMouse!==false) estH += keySize + gap;
-      if(mod.keystrokesShowSpace!==false) estH += (keySize-4) + gap;
-      if(mod.keystrokesShowShift!==false) estH += (keySize-6) + gap;
-      if(estH===0) estH = keySize;
-      const estW = 3*keySize + 2*gap;
-      el.style.width = estW + 'px';
-      el.style.height = estH + 'px';
+    if(isKeysBox){
+      el.style.width = ((pv.w>0?pv.w:60)) + 'px';
+      el.style.height = ((pv.h>0?pv.h:18)) + 'px';
       el.style.padding = '2px';
       el.style.display = 'flex';
       el.style.flexDirection = 'column';
@@ -313,8 +248,6 @@ function syncEditorItems(){
       el.style.fontSize = '9px';
       el.style.lineHeight = '1';
       el.style.whiteSpace = 'pre';
-      txt = mod.keystrokesShowCps ? `WASD\nL${liveCpsLeft??8} R${liveCpsRight??12}` : `WASD`;
-      if(mod.keystrokesShowMouse===false) txt = 'WASD';
       if(bgEnabled){
         const bgCol = mod.backgroundColor || '#1A1B20';
         const bgOp = mod.backgroundOpacity ?? 0.85;
@@ -327,10 +260,7 @@ function syncEditorItems(){
       }
       el.style.color = mod.textColor || 'var(--text-bright)';
       el.style.borderRadius='6px';
-      if(window.liveKeys){
-        const anyPressed = window.liveKeys.w||window.liveKeys.a||window.liveKeys.s||window.liveKeys.d||window.liveKeys.space||window.liveKeys.shift||window.liveKeys.lmb||window.liveKeys.rmb;
-        if(anyPressed) el.style.background = mod.keystrokesPressedColor || 'var(--accent)';
-      }
+      if(pv.highlight) el.style.background = mod.keystrokesPressedColor || 'var(--accent)';
     } else if(bgEnabled){
       const bgCol = mod.backgroundColor || '#1A1B20';
       const bgOp = mod.backgroundOpacity ?? 0.85;
@@ -347,7 +277,7 @@ function syncEditorItems(){
     el.style.transform=`scale(${scale})`; el.style.transformOrigin='top left';
     el.textContent=txt;
     el.style.opacity = mod.opacity ?? 1;
-    if(isKeystrokes && mod.keystrokesOutline===false){
+    if(isKeysBox && mod.keystrokesOutline===false){
       el.style.borderColor='transparent';
     }
     let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - 12));

@@ -158,7 +158,7 @@ public class NetworkPackets {
         }
     }
 
-    public void broadcastLiveStats(int ping, int fps, int cpsLeft, int cpsRight, boolean w, boolean a, boolean sKey, boolean d, boolean space, boolean shift, boolean lmb, boolean rmb) {
+    public void broadcastLiveStats(int ping, int fps, int cpsLeft, int cpsRight, boolean w, boolean a, boolean sKey, boolean d, boolean space, boolean shift, boolean lmb, boolean rmb, JsonObject previews) {
         JsonObject data = new JsonObject();
         data.addProperty("ping", ping);
         data.addProperty("fps", fps);
@@ -174,6 +174,7 @@ public class NetworkPackets {
         keys.addProperty("lmb", lmb);
         keys.addProperty("rmb", rmb);
         data.add("keys", keys);
+        if (previews != null) data.add("previews", previews);
         JsonObject payload = new JsonObject();
         payload.addProperty("type", "LIVE_STATS");
         payload.add("data", data);
@@ -186,7 +187,7 @@ public class NetworkPackets {
     }
     // legacy overload
     public void broadcastLiveStats(int ping, int fps) {
-        broadcastLiveStats(ping, fps, 0, 0, false, false, false, false, false, false, false, false);
+        broadcastLiveStats(ping, fps, 0, 0, false, false, false, false, false, false, false, false, null);
     }
 
     public Set<WsContext> getSessions() {

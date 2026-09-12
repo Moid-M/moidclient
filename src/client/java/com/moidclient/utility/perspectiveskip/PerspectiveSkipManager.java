@@ -22,7 +22,7 @@ public final class PerspectiveSkipManager {
     public static ModuleDef definition() {
         return new ModuleDef("perspectiveSkip", "Perspective Skip",
                 "F5 skips one third-person view - choose which one.",
-                "utility", false,
+                "utility", false, "switch", false,
                 ModuleOption.list(
                     ModuleOption.select("perspectiveSkipMode", "View to skip",
                             java.util.List.of("skipBack", "skipFront"))

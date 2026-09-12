@@ -16,7 +16,7 @@ public final class FullbrightManager {
     private FullbrightManager() {}
 
     public static ModuleDef definition() {
-        return new ModuleDef("fullbright", "Fullbright", "Gamma boost for dark areas - no overlay.", "visuals", false,
+        return new ModuleDef("fullbright", "Fullbright", "Gamma boost for dark areas - no overlay.", "visuals", false, "sun", false,
             ModuleOption.list(
                 ModuleOption.slider("fullbrightGamma", "Brightness", 1, 15, 0.5)
             ));

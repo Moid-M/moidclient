@@ -1,6 +1,8 @@
 package com.moidclient.module;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.cps.CpsHud;
 import com.moidclient.hud.fps.FpsHud;
 import com.moidclient.hud.keystrokes.KeystrokesHud;
@@ -37,5 +39,19 @@ public final class ModuleRegistry {
         JsonArray arr = new JsonArray();
         for (ModuleDef def : all()) arr.add(def.toJson());
         return arr;
+    }
+
+    /** Server-computed editor previews for every module that has one. */
+    public static JsonObject previews(ConfigManager config, LiveStats stats) {
+        JsonObject out = new JsonObject();
+        putPreview(out, PingHud.preview(config, stats));
+        putPreview(out, FpsHud.preview(config, stats));
+        putPreview(out, CpsHud.preview(config, stats));
+        putPreview(out, KeystrokesHud.preview(config, stats));
+        return out;
+    }
+
+    private static void putPreview(JsonObject out, ModulePreview preview) {
+        if (preview != null) out.add(preview.id, preview.toJson());
     }
 }

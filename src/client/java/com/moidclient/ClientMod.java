@@ -125,7 +125,10 @@ public class ClientMod implements ClientModInitializer {
                             rmb = org.lwjgl.glfw.GLFW.glfwGetMouseButton(h, org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
                         }
                     } catch (Exception e) { LOGGER.warn("[MoidClient] key poll failed", e); }
-                    networkPackets.broadcastLiveStats(ping, fps, cpsL, cpsR, w, a, s, d, space, shift, lmb, rmb);
+                    com.moidclient.module.LiveStats stats = new com.moidclient.module.LiveStats(
+                            ping, fps, cpsL, cpsR, w, a, s, d, space, shift, lmb, rmb);
+                    com.google.gson.JsonObject previews = com.moidclient.module.ModuleRegistry.previews(configManager, stats);
+                    networkPackets.broadcastLiveStats(ping, fps, cpsL, cpsR, w, a, s, d, space, shift, lmb, rmb, previews);
                 } catch (Exception e) { LOGGER.error("[MoidClient] live stats broadcast failed", e); }
             }
         });

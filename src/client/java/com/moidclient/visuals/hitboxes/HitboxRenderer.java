@@ -32,7 +32,7 @@ public final class HitboxRenderer {
     public static ModuleDef definition() {
         return new ModuleDef("hitboxes", "Custom Hitboxes",
                 "Always-on entity hitboxes with per-group colors.",
-                "visuals", false,
+                "visuals", false, "target", false,
             ModuleOption.list(
                 ModuleOption.bool("hitboxPlayers", "Players"),
                 ModuleOption.color("hitboxPlayersColor", "Player color"),

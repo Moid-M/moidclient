@@ -2,8 +2,10 @@ package com.moidclient.hud.keystrokes;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
+import com.moidclient.module.ModulePreview;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -19,8 +21,49 @@ import org.lwjgl.glfw.GLFW;
 public final class KeystrokesHud {
     private KeystrokesHud() {}
 
+    /** Editor-box size in MC pixels - same math as render(). */
+    public static int[] measure(ConfigManager.ModuleConfig mod) {
+        int gap = Math.max(0, Math.min(10, mod.keystrokesGap));
+        int keySize = 18;
+        int estH = 0;
+        if (mod.keystrokesShowW) estH += keySize + gap;
+        if (mod.keystrokesShowA || mod.keystrokesShowS || mod.keystrokesShowD) estH += keySize + gap;
+        if (mod.keystrokesShowMouse) estH += keySize + gap;
+        if (mod.keystrokesShowSpace) estH += (keySize - 4) + gap;
+        if (mod.keystrokesShowShift) estH += (keySize - 6) + gap;
+        if (estH == 0) estH = keySize;
+        return new int[]{3 * keySize + 2 * gap, estH};
+    }
+
+    public static ModulePreview preview(ConfigManager config, LiveStats stats) {
+        if (config == null) return null;
+        ConfigManager.ModuleConfig mod = config.getModule("keystrokes");
+        if (mod == null) return null;
+        StringBuilder parts = new StringBuilder();
+        if (mod.keystrokesShowW) parts.append("W ");
+        if (mod.keystrokesShowA) parts.append("A ");
+        if (mod.keystrokesShowS) parts.append("S ");
+        if (mod.keystrokesShowD) parts.append("D ");
+        String txt = parts.toString().trim();
+        if (txt.isEmpty()) txt = "-";
+        if (mod.keystrokesShowMouse) {
+            if (mod.keystrokesShowCps) {
+                int l = stats != null ? stats.cpsLeft : 0;
+                int r = stats != null ? stats.cpsRight : 0;
+                txt += "  L" + l + " R" + r;
+            } else {
+                txt += "  L R";
+            }
+        }
+        if (mod.keystrokesShowSpace) txt += " _";
+        if (mod.keystrokesShowShift) txt += " ^";
+        int[] size = measure(mod);
+        boolean highlight = stats != null && stats.anyKeyPressed();
+        return new ModulePreview("keystrokes", txt, "keystrokes", size[0], size[1], highlight);
+    }
+
     public static ModuleDef definition() {
-        return new ModuleDef("keystrokes", "Keystrokes", "WASD + mouse overlay.", "hud", true,
+        return new ModuleDef("keystrokes", "Keystrokes", "WASD + mouse overlay.", "hud", true, "keyboard", true,
             ModuleOption.list(
                 ModuleOption.bool("keystrokesShowW", "Show W"),
                 ModuleOption.bool("keystrokesShowA", "Show A"),

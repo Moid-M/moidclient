@@ -29,7 +29,7 @@ public final class BlockOutlineRenderer {
     private BlockOutlineRenderer() {}
 
     public static ModuleDef definition() {
-        return new ModuleDef("blockOutline", "Block Outline", "Custom color outline on the targeted block.", "visuals", false,
+        return new ModuleDef("blockOutline", "Block Outline", "Custom color outline on the targeted block.", "visuals", false, "box", false,
             ModuleOption.list(
                 ModuleOption.nullableColor("textColor", "Outline color", "empty = accent"),
                 ModuleOption.select("blockOutlineMode", "Mode", java.util.List.of("block", "face")),

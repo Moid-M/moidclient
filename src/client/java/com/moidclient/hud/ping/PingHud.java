@@ -2,8 +2,10 @@ package com.moidclient.hud.ping;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
+import com.moidclient.module.ModulePreview;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -18,7 +20,7 @@ public final class PingHud {
     private PingHud() {}
 
     public static ModuleDef definition() {
-        return new ModuleDef("ping", "Ping Display", "Server latency in ms.", "hud", true,
+        return new ModuleDef("ping", "Ping Display", "Server latency in ms.", "hud", true, "signal", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "Ping: {ping} ms"),
                 ModuleOption.bool("shadow", "Text shadow"),
@@ -73,6 +75,16 @@ public final class PingHud {
     }
 
     public static int getCurrentPing() { return getPing(); }
+
+    public static ModulePreview preview(ConfigManager config, LiveStats stats) {
+        if (config == null) return null;
+        ConfigManager.ModuleConfig mod = config.getModule("ping");
+        if (mod == null) return null;
+        int ping = stats != null ? stats.ping : 0;
+        String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "Ping: {ping} ms";
+        String text = fmt.replace("{ping}", String.valueOf(ping)).replace("{value}", String.valueOf(ping));
+        return ModulePreview.text("ping", text);
+    }
 
     private static int getPing() {
         try {

@@ -2,8 +2,10 @@ package com.moidclient.hud.fps;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
+import com.moidclient.module.ModulePreview;
 import com.moidclient.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -21,7 +23,7 @@ public final class FpsHud {
     private FpsHud() {}
 
     public static ModuleDef definition() {
-        return new ModuleDef("fpsCounter", "FPS Counter", "Shows current frames per second.", "hud", true,
+        return new ModuleDef("fpsCounter", "FPS Counter", "Shows current frames per second.", "hud", true, "activity", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "FPS: {fps}"),
                 ModuleOption.bool("shadow", "Text shadow"),
@@ -83,6 +85,18 @@ public final class FpsHud {
 
     public static int getCurrentFps() {
         try { return Minecraft.getInstance().getFps(); } catch (Exception e) { return 60; }
+    }
+
+    public static ModulePreview preview(ConfigManager config, LiveStats stats) {
+        if (config == null) return null;
+        ConfigManager.ModuleConfig mod = config.getModule("fpsCounter");
+        if (mod == null) return null;
+        int fps = stats != null ? stats.fps : 0;
+        String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "FPS: {fps}";
+        String text = fmt.replace("{fps}", String.valueOf(fps))
+                .replace("{value}", String.valueOf(fps))
+                .replace("{ping}", String.valueOf(fps));
+        return ModulePreview.text("fpsCounter", text);
     }
 
     private static int getFpsForMode(String mode, DeltaTracker dt) {

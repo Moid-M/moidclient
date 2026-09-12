@@ -16,15 +16,24 @@ public final class ModuleDef {
     public final String description;
     public final String category;
     public final boolean overlay;
+    public final String icon;
+    public final boolean editor;
     public final List<ModuleOption> options;
 
     public ModuleDef(String id, String name, String description, String category,
                      boolean overlay, List<ModuleOption> options) {
+        this(id, name, description, category, overlay, id, false, options);
+    }
+
+    public ModuleDef(String id, String name, String description, String category,
+                     boolean overlay, String icon, boolean editor, List<ModuleOption> options) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.category = category;
         this.overlay = overlay;
+        this.icon = icon != null ? icon : id;
+        this.editor = editor;
         this.options = List.copyOf(options);
     }
 
@@ -35,6 +44,8 @@ public final class ModuleDef {
         o.addProperty("description", description);
         o.addProperty("category", category);
         o.addProperty("overlay", overlay);
+        o.addProperty("icon", icon);
+        o.addProperty("editor", editor);
         o.add("options", ModuleOption.toJsonList(options));
         return o;
     }

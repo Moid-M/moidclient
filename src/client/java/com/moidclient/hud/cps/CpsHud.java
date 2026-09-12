@@ -31,7 +31,7 @@ public final class CpsHud {
     private CpsHud() {}
 
     public static ModuleDef definition() {
-        return new ModuleDef("cpsCounter", "CPS Counter", "Clicks per second - left | right with burst fire.", "hud", true,
+        return new ModuleDef("cpsCounter", "CPS Counter", "Clicks per second - left | right with burst fire.", "hud", true, "mouse", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "CPS: {left} | {right}"),
                 ModuleOption.bool("shadow", "Text shadow"),
@@ -100,48 +100,7 @@ public final class CpsHud {
         int left = getLeftCps();
         int right = getRightCps();
         String mode = mod.cpsMode != null ? mod.cpsMode : "both";
-        String fmt = mod.format;
-        if (fmt == null || fmt.isEmpty()) {
-            if ("left".equals(mode)) fmt = "CPS: {left}";
-            else if ("right".equals(mode)) fmt = "CPS: {right}";
-            else fmt = "CPS: {left} | {right}";
-        }
-        // legacy migration: if format still contains {ping}
-        if (fmt.contains("{ping}")) {
-            if ("left".equals(mode)) fmt = "CPS: {left}";
-            else if ("right".equals(mode)) fmt = "CPS: {right}";
-            else fmt = "CPS: {left} | {right}";
-        }
-        // hide unused placeholder when mode is left/right (so Both shows "8 | 12", Left shows "8", Right shows "12")
-        if ("left".equals(mode)) {
-            fmt = fmt.replaceAll("\\s*\\|\\s*\\{right\\}", "").replaceAll("\\{right\\}\\s*\\|\\s*", "").replace("{right}", "").replace("{r}", "");
-            fmt = fmt.replaceAll("\\|\\s*\\|", "|").replaceAll("\\s*\\|\\s*$", "").replaceAll("^\\s*\\|\\s*", "").trim();
-            // clean up "CPS:  |" -> "CPS:"
-            fmt = fmt.replaceAll("\\s*\\|\\s*$", "").trim();
-        } else if ("right".equals(mode)) {
-            fmt = fmt.replaceAll("\\s*\\|\\s*\\{left\\}", "").replaceAll("\\{left\\}\\s*\\|\\s*", "").replace("{left}", "").replace("{l}", "");
-            fmt = fmt.replaceAll("\\|\\s*\\|", "|").replaceAll("\\s*\\|\\s*$", "").replaceAll("^\\s*\\|\\s*", "").trim();
-            fmt = fmt.replaceAll("\\s*\\|\\s*$", "").trim();
-        }
-        String text = fmt.replace("{left}", String.valueOf(left))
-                         .replace("{right}", String.valueOf(right))
-                         .replace("{cps}", String.valueOf(Math.max(left, right)))
-                         .replace("{l}", String.valueOf(left))
-                         .replace("{r}", String.valueOf(right))
-                         .replace("{value}", String.valueOf(left))
-                         .replace("{ping}", String.valueOf(left));
-        // clean any leftover empty placeholders after mode filtering
-        text = text.replaceAll("\\s*\\|\\s*\\|", " | ").replaceAll("\\s*\\|\\s*$", "").trim();
-
-        // surprise: fire icon when bursting (>10) and peak tag
-        boolean bursting = left > 10 || right > 10;
-        if (bursting && !text.contains("🔥")) {
-            // subtle: add fire for fun when bursting, but keep format clean if user has custom format without fire
-            // we append fire only if format is default style
-            if (fmt.equals("CPS: {left} | {right}") || fmt.equals("CPS: {cps}")) {
-                text = text + " \uD83D\uDD25";
-            }
-        }
+        String text = formatText(mod, left, right);
 
         int color;
         // dynamic color: low cps muted, high cps green
@@ -181,6 +140,63 @@ public final class CpsHud {
         } finally {
             pose.popMatrix();
         }
+    }
+
+    /** Shared text builder used by both the in-game HUD and the dashboard preview. */
+    public static String formatText(ConfigManager.ModuleConfig mod, int left, int right) {
+        String mode = mod.cpsMode != null ? mod.cpsMode : "both";
+        String fmt = mod.format;
+        if (fmt == null || fmt.isEmpty()) {
+            if ("left".equals(mode)) fmt = "CPS: {left}";
+            else if ("right".equals(mode)) fmt = "CPS: {right}";
+            else fmt = "CPS: {left} | {right}";
+        }
+        // legacy migration: if format still contains {ping}
+        if (fmt.contains("{ping}")) {
+            if ("left".equals(mode)) fmt = "CPS: {left}";
+            else if ("right".equals(mode)) fmt = "CPS: {right}";
+            else fmt = "CPS: {left} | {right}";
+        }
+        // hide unused placeholder when mode is left/right (so Both shows "8 | 12", Left shows "8", Right shows "12")
+        if ("left".equals(mode)) {
+            fmt = fmt.replaceAll("\\s*\\|\\s*\\{right\\}", "").replaceAll("\\{right\\}\\s*\\|\\s*", "").replace("{right}", "").replace("{r}", "");
+            fmt = fmt.replaceAll("\\|\\s*\\|", "|").replaceAll("\\s*\\|\\s*$", "").replaceAll("^\\s*\\|\\s*", "").trim();
+            // clean up "CPS:  |" -> "CPS:"
+            fmt = fmt.replaceAll("\\s*\\|\\s*$", "").trim();
+        } else if ("right".equals(mode)) {
+            fmt = fmt.replaceAll("\\s*\\|\\s*\\{left\\}", "").replaceAll("\\{left\\}\\s*\\|\\s*", "").replace("{left}", "").replace("{l}", "");
+            fmt = fmt.replaceAll("\\|\\s*\\|", "|").replaceAll("\\s*\\|\\s*$", "").replaceAll("^\\s*\\|\\s*", "").trim();
+            fmt = fmt.replaceAll("\\s*\\|\\s*$", "").trim();
+        }
+        String text = fmt.replace("{left}", String.valueOf(left))
+                         .replace("{right}", String.valueOf(right))
+                         .replace("{cps}", String.valueOf(Math.max(left, right)))
+                         .replace("{l}", String.valueOf(left))
+                         .replace("{r}", String.valueOf(right))
+                         .replace("{value}", String.valueOf(left))
+                         .replace("{ping}", String.valueOf(left));
+        // clean any leftover empty placeholders after mode filtering
+        text = text.replaceAll("\\s*\\|\\s*\\|", " | ").replaceAll("\\s*\\|\\s*$", "").trim();
+
+        // surprise: fire icon when bursting (>10) and peak tag
+        boolean bursting = left > 10 || right > 10;
+        if (bursting && !text.contains("🔥")) {
+            // subtle: add fire for fun when bursting, but keep format clean if user has custom format without fire
+            // we append fire only if format is default style
+            if (fmt.equals("CPS: {left} | {right}") || fmt.equals("CPS: {cps}")) {
+                text = text + " 🔥";
+            }
+        }
+        return text;
+    }
+
+    public static com.moidclient.module.ModulePreview preview(ConfigManager config, com.moidclient.module.LiveStats stats) {
+        if (config == null) return null;
+        ConfigManager.ModuleConfig mod = config.getModule("cpsCounter");
+        if (mod == null) return null;
+        int left = stats != null ? stats.cpsLeft : 0;
+        int right = stats != null ? stats.cpsRight : 0;
+        return com.moidclient.module.ModulePreview.text("cpsCounter", formatText(mod, left, right));
     }
 
     private static int colorForCps(int cps, double opacity) {
