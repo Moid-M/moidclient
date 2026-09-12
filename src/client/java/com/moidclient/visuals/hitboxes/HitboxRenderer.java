@@ -56,12 +56,23 @@ public final class HitboxRenderer {
     private static int frameCounter = 0;
 
     public static void register(ConfigManager config) {
-        LevelRenderEvents.BEFORE_GIZMOS.register(context -> {
+        LevelRenderEvents.BEFORE_GIZMOS.register(context -> renderAtStage(context, config, "gizmos"));
+        LevelRenderEvents.AFTER_SOLID_FEATURES.register(context -> renderAtStage(context, config, "solid"));
+        LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(context -> renderAtStage(context, config, "translucent"));
+        LevelRenderEvents.END_MAIN.register(context -> renderAtStage(context, config, "end"));
+        LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, state) -> {
+            renderAtStage(context, config, "outline");
+            return true;
+        });
+    }
+
+    // TEMPORARY multi-stage probe: draws wherever the states list is populated
+    // so one test run reveals the working stage. Will be trimmed to one stage.
+    private static void renderAtStage(LevelRenderContext context, ConfigManager config, String stage) {
             try {
                 if (config == null) return;
                 ConfigManager.ModuleConfig mod = config.getModule("hitboxes");
                 if (mod == null || !mod.enabled) return;
-                diagLog(context);
 
                 // configurable render rate (perf scaling) - positions come from
                 // extracted render states, so they stay smooth at any rate.
@@ -79,8 +90,18 @@ public final class HitboxRenderer {
                 double eyeLen = Math.max(1.0, Math.min(5.0, mod.hitboxEyeLength <= 0 ? 2.0 : mod.hitboxEyeLength));
 
                 Vec3 cam = context.levelState().cameraRenderState.pos;
+                var states = context.levelState().entityRenderStates;
+                if (!states.isEmpty() || (diagCounter++ % 300) == 0) {
+                    String sample = "none";
+                    if (!states.isEmpty()) {
+                        var s0 = states.get(0);
+                        sample = "type=" + s0.entityType + " w=" + s0.boundingBoxWidth + " h=" + s0.boundingBoxHeight
+                                + " distSq=" + s0.distanceToCameraSq;
+                    }
+                    DIAG_LOG.info("[MoidClient][HitboxDiag] stage={} states={} sample=[{}]", stage, states.size(), sample);
+                }
 
-                for (EntityRenderState state : context.levelState().entityRenderStates) {
+                for (EntityRenderState state : states) {
                     try {
                         if (state == null) continue;
                         if (state.distanceToCameraSq > rangeSq) continue;
@@ -116,7 +137,6 @@ public final class HitboxRenderer {
                     } catch (Exception ignored) {}
                 }
             } catch (Exception ignored) {}
-        });
     }
 
     private static boolean isPlayer(EntityRenderState state) {
@@ -257,23 +277,6 @@ public final class HitboxRenderer {
 
     private static final org.slf4j.Logger DIAG_LOG = org.slf4j.LoggerFactory.getLogger("MoidClient");
     private static int diagCounter = 0;
-
-    /** Temporary diagnostic: proves what the 26.2 render states carry. Remove once settled. */
-    private static void diagLog(LevelRenderContext context) {
-        if ((diagCounter++ % 200) != 0) return;
-        try {
-            var list = context.levelState().entityRenderStates;
-            String sample = "none";
-            if (!list.isEmpty()) {
-                var s = list.get(0);
-                sample = "type=" + s.entityType + " w=" + s.boundingBoxWidth + " h=" + s.boundingBoxHeight
-                        + " distSq=" + s.distanceToCameraSq + " xyz=" + s.x + "," + s.y + "," + s.z;
-            }
-            DIAG_LOG.info("[MoidClient][HitboxDiag] states={} sample=[{}]", list.size(), sample);
-        } catch (Exception e) {
-            DIAG_LOG.info("[MoidClient][HitboxDiag] err {}", String.valueOf(e));
-        }
-    }
 
     private static java.lang.reflect.Method cachedBufferSource = null;
     private static java.lang.reflect.Method cachedGetBuffer = null;
