@@ -3,10 +3,15 @@ package com.moidclient.visuals.blockoutline;
 import com.moidclient.config.ConfigManager;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.moidclient.util.ColorUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
@@ -57,8 +62,48 @@ public final class BlockOutlineRenderer {
         };
     }
 
-    private static Direction targetFace(BlockPos pos) {
+    /**
+     * Immediate line buffer when the platform offers one (26.1). Resolved via
+     * reflection so the same source also compiles where it doesn't exist -
+     * returns null there and the caller uses the submit pipeline instead.
+     */
+    private static VertexConsumer immediateLinesBuffer(LevelRenderContext context, float alpha) {
         try {
+            java.lang.reflect.Method m = context.getClass().getMethod("bufferSource");
+            Object source = m.invoke(context);
+            java.lang.reflect.Method g = source.getClass().getMethod("getBuffer", RenderType.class);
+            RenderType type = alpha >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent();
+            return (VertexConsumer) g.invoke(source, type);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static void drawEdges(VoxelShape shape, PoseStack.Pose pose, VertexConsumer consumer,
+                                  float r, float g, float b, float a,
+                                  float r2, float g2, float b2,
+                                  double minY, double height, boolean useFade, double flowPhase,
+                                  float width, Direction faceDir, AABB shapeBounds) {
+        shape.forAllEdges((x1, y1, z1, x2, y2, z2) -> {
+            if (faceDir != null && !onFace(x1, y1, z1, x2, y2, z2, faceDir, shapeBounds)) return;
+            float dx = (float) (x2 - x1);
+            float dy = (float) (y2 - y1);
+            float dz = (float) (z2 - z1);
+            float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            float nx = 0, ny = 1, nz = 0;
+            if (len > 1e-6f) {
+                nx = dx / len;
+                ny = dy / len;
+                nz = dz / len;
+            }
+            float[] c1 = flowColor(r, g, b, r2, g2, b2, y1, minY, height, useFade, flowPhase);
+            float[] c2 = flowColor(r, g, b, r2, g2, b2, y2, minY, height, useFade, flowPhase);
+            consumer.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(c1[0], c1[1], c1[2], a).setNormal(nx, ny, nz).setLineWidth(width);
+            consumer.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(c2[0], c2[1], c2[2], a).setNormal(nx, ny, nz).setLineWidth(width);
+        });
+    }
+
+    private static Direction targetFace(BlockPos pos) {        try {
             var hit = Minecraft.getInstance().hitResult;
             if (hit instanceof BlockHitResult bhr && hit.getType() != HitResult.Type.MISS
                     && bhr.getBlockPos().equals(pos)) {
@@ -120,33 +165,34 @@ public final class BlockOutlineRenderer {
                 double oy = pos.getY() - cam.y;
                 double oz = pos.getZ() - cam.z;
 
-                // submit into the outline pass (same pattern as Fabric's own
-                // testmod) - available in every supported version's API.
+                // Dual-path draw so one source runs on every supported version:
+                // 26.1 exposes an immediate line buffer -> draw now (proven).
+                // 26.2+ only offers the submit pipeline -> submit instead.
                 var poseStack = context.poseStack();
-                poseStack.pushPose();
-                try {
-                    poseStack.translate(ox, oy, oz);
-                    context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.secondaryBlockOutline(), (pose, consumer) ->
-                        state.shape().forAllEdges((x1, y1, z1, x2, y2, z2) -> {
-                            if (faceDir != null && !onFace(x1, y1, z1, x2, y2, z2, faceDir, shapeBounds)) return;
-                            float dx = (float) (x2 - x1);
-                            float dy = (float) (y2 - y1);
-                            float dz = (float) (z2 - z1);
-                            float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-                            float nx = 0, ny = 1, nz = 0;
-                            if (len > 1e-6f) {
-                                nx = dx / len;
-                                ny = dy / len;
-                                nz = dz / len;
-                            }
-                            float[] c1 = flowColor(r, g, b, fr2, fg2, fb2, y1, minY, height, useFade, flowPhase);
-                            float[] c2 = flowColor(r, g, b, fr2, fg2, fb2, y2, minY, height, useFade, flowPhase);
-                            consumer.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(c1[0], c1[1], c1[2], a).setNormal(nx, ny, nz).setLineWidth(width);
-                            consumer.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(c2[0], c2[1], c2[2], a).setNormal(nx, ny, nz).setLineWidth(width);
-                        })
-                    );
-                } finally {
-                    poseStack.popPose();
+                var immediate = immediateLinesBuffer(context, a);
+                if (immediate != null) {
+                    poseStack.pushPose();
+                    try {
+                        poseStack.translate(ox, oy, oz);
+                        var pose = poseStack.last();
+                        drawEdges(state.shape(), pose, immediate,
+                                r, g, b, a, fr2, fg2, fb2, minY, height, useFade, flowPhase,
+                                width, faceDir, shapeBounds);
+                    } finally {
+                        poseStack.popPose();
+                    }
+                } else {
+                    poseStack.pushPose();
+                    try {
+                        poseStack.translate(ox, oy, oz);
+                        context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(), (pose, consumer) ->
+                            drawEdges(state.shape(), pose, consumer,
+                                    r, g, b, a, fr2, fg2, fb2, minY, height, useFade, flowPhase,
+                                    width, faceDir, shapeBounds)
+                        );
+                    } finally {
+                        poseStack.popPose();
+                    }
                 }
                 return false;
             } catch (Exception e) {
