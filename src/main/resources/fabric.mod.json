@@ -20,7 +20,7 @@
   "mixins": [],
   "depends": {
     "fabricloader": ">=0.19.3",
-    "minecraft": ">=26.1 <26.4",
+    "minecraft": "~${mc_version}",
     "java": ">=25",
     "fabric-api": "*"
   }

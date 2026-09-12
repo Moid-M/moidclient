@@ -1,5 +1,5 @@
 ﻿// Moid Client - HUD Editor + inline pickers, center fix, drag fix, no X/Y in card
-const MOID_APP_VERSION='1.0.4-themeauto';
+const MOID_APP_VERSION='1.0.5-greydefault';
 console.log('[MoidClient] app.js '+MOID_APP_VERSION);
 const PRESETS = [
   { name: 'Electric Violet', hex: '#8B5CF6' },
@@ -55,7 +55,7 @@ async function loadModuleDefs(){
 function defsNoticeHtml(){
   return `<div class="card p-5 text-xs leading-relaxed" style="color:var(--text-muted)">Waiting for Minecraft — start the game with Moid Client installed, then open this dashboard. <button class="underline" style="color:var(--accent)" onclick="location.reload()">Retry</button></div>`;
 }
-let ws=null, accent='#8B5CF6', config={accentColor:accent, modules:{}};
+let ws=null, accent='#9F9F9F', config={accentColor:accent, modules:{}};
 let focusedId=null, hasInitialRendered=false, isDraggingSlider=false;
 let isDraggingHud=false;
 let lastBgToggle=0;
@@ -1041,7 +1041,7 @@ function handleSync(data){
   const onboard=$('#onboarding');
   if(!localStorage.getItem('cc_onboarded')){
     const hasSaved=!!localStorage.getItem('cc_accent');
-    if(!hasSaved && data.accentColor==='#8B5CF6'){ onboard.classList.remove('hidden'); onboard.classList.add('flex'); }
+    if(!hasSaved && data.accentColor==='#9F9F9F'){ onboard.classList.remove('hidden'); onboard.classList.add('flex'); }
   }
 }
 function connect(){

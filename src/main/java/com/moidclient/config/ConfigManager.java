@@ -27,7 +27,7 @@ public class ConfigManager {
     private static final String FILE_NAME = "moidclient.json";
 
     // Default accent presets
-    public static final String DEFAULT_ACCENT = "#8B5CF6";
+    public static final String DEFAULT_ACCENT = "#9F9F9F";
 
     private File configFile;
     private JsonObject root;

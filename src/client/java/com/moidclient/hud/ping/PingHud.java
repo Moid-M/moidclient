@@ -1,6 +1,7 @@
 package com.moidclient.hud.ping;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.hud.HudCompat;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
@@ -30,7 +31,7 @@ public final class PingHud {
         if (config == null) return;
         ConfigManager.ModuleConfig mod = config.getModule("ping");
         if (mod == null || !mod.enabled) return;
-        if (Minecraft.getInstance().options.hideGui) return;
+        if (HudCompat.isHudHidden(Minecraft.getInstance())) return;
 
         int ping = getPing();
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "Ping: {ping} ms";

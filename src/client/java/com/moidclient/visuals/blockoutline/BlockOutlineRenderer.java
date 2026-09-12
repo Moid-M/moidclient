@@ -120,31 +120,31 @@ public final class BlockOutlineRenderer {
                 double oy = pos.getY() - cam.y;
                 double oz = pos.getZ() - cam.z;
 
-                // immediate draw into the line buffer (proven Fabric pattern) -
-                // no deferred submits, so nothing can get lost.
+                // submit into the outline pass (same pattern as Fabric's own
+                // testmod) - available in every supported version's API.
                 var poseStack = context.poseStack();
-                var buffer = context.bufferSource().getBuffer(a >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent());
                 poseStack.pushPose();
                 try {
                     poseStack.translate(ox, oy, oz);
-                    var pose = poseStack.last();
-                    state.shape().forAllEdges((x1, y1, z1, x2, y2, z2) -> {
-                        if (faceDir != null && !onFace(x1, y1, z1, x2, y2, z2, faceDir, shapeBounds)) return;
-                        float dx = (float) (x2 - x1);
-                        float dy = (float) (y2 - y1);
-                        float dz = (float) (z2 - z1);
-                        float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-                        float nx = 0, ny = 1, nz = 0;
-                        if (len > 1e-6f) {
-                            nx = dx / len;
-                            ny = dy / len;
-                            nz = dz / len;
-                        }
-                        float[] c1 = flowColor(r, g, b, fr2, fg2, fb2, y1, minY, height, useFade, flowPhase);
-                        float[] c2 = flowColor(r, g, b, fr2, fg2, fb2, y2, minY, height, useFade, flowPhase);
-                        buffer.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(c1[0], c1[1], c1[2], a).setNormal(nx, ny, nz).setLineWidth(width);
-                        buffer.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(c2[0], c2[1], c2[2], a).setNormal(nx, ny, nz).setLineWidth(width);
-                    });
+                    context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.secondaryBlockOutline(), (pose, consumer) ->
+                        state.shape().forAllEdges((x1, y1, z1, x2, y2, z2) -> {
+                            if (faceDir != null && !onFace(x1, y1, z1, x2, y2, z2, faceDir, shapeBounds)) return;
+                            float dx = (float) (x2 - x1);
+                            float dy = (float) (y2 - y1);
+                            float dz = (float) (z2 - z1);
+                            float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+                            float nx = 0, ny = 1, nz = 0;
+                            if (len > 1e-6f) {
+                                nx = dx / len;
+                                ny = dy / len;
+                                nz = dz / len;
+                            }
+                            float[] c1 = flowColor(r, g, b, fr2, fg2, fb2, y1, minY, height, useFade, flowPhase);
+                            float[] c2 = flowColor(r, g, b, fr2, fg2, fb2, y2, minY, height, useFade, flowPhase);
+                            consumer.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(c1[0], c1[1], c1[2], a).setNormal(nx, ny, nz).setLineWidth(width);
+                            consumer.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(c2[0], c2[1], c2[2], a).setNormal(nx, ny, nz).setLineWidth(width);
+                        })
+                    );
                 } finally {
                     poseStack.popPose();
                 }

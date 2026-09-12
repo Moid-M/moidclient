@@ -1,6 +1,7 @@
 package com.moidclient.hud.keystrokes;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.hud.HudCompat;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
@@ -42,7 +43,7 @@ public final class KeystrokesHud {
         if (config == null) return;
         ConfigManager.ModuleConfig mod = config.getModule("keystrokes");
         if (mod == null || !mod.enabled) return;
-        if (Minecraft.getInstance().options.hideGui) return;
+        if (HudCompat.isHudHidden(Minecraft.getInstance())) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.getWindow() == null) return;

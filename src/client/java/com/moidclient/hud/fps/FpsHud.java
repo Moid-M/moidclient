@@ -1,6 +1,7 @@
 package com.moidclient.hud.fps;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.hud.HudCompat;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
@@ -35,7 +36,7 @@ public final class FpsHud {
         if (config == null) return;
         ConfigManager.ModuleConfig mod = config.getModule("fpsCounter");
         if (mod == null || !mod.enabled) return;
-        if (Minecraft.getInstance().options.hideGui) return;
+        if (HudCompat.isHudHidden(Minecraft.getInstance())) return;
 
         int fpsVal = getFpsForMode(mod.fpsMode, deltaTracker);
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "FPS: {fps}";

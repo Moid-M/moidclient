@@ -1,6 +1,7 @@
 package com.moidclient.hud.cps;
 
 import com.moidclient.config.ConfigManager;
+import com.moidclient.hud.HudCompat;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
@@ -94,7 +95,7 @@ public final class CpsHud {
         if (config == null) return;
         ConfigManager.ModuleConfig mod = config.getModule("cpsCounter");
         if (mod == null || !mod.enabled) return;
-        if (Minecraft.getInstance().options.hideGui) return;
+        if (HudCompat.isHudHidden(Minecraft.getInstance())) return;
 
         int left = getLeftCps();
         int right = getRightCps();
