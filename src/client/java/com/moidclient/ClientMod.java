@@ -121,7 +121,8 @@ public class ClientMod implements ClientModInitializer {
                         }
                     } catch (Exception e) { LOGGER.warn("[MoidClient] key poll failed", e); }
                     com.moidclient.module.LiveStats stats = new com.moidclient.module.LiveStats(
-                            ping, fps, cpsL, cpsR, w, a, s, d, space, shift, lmb, rmb);
+                            ping, fps, cpsL, cpsR, CpsHud.getPeakLeft(), CpsHud.getPeakRight(),
+                            w, a, s, d, space, shift, lmb, rmb);
                     com.google.gson.JsonObject previews = com.moidclient.module.ModuleRegistry.previews(configManager, stats);
                     networkPackets.broadcastLiveStats(ping, fps, cpsL, cpsR, w, a, s, d, space, shift, lmb, rmb, previews);
                 } catch (Exception e) { LOGGER.error("[MoidClient] live stats broadcast failed", e); }

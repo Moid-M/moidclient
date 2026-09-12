@@ -61,6 +61,7 @@ public final class HitboxRenderer {
                 if (config == null) return;
                 ConfigManager.ModuleConfig mod = config.getModule("hitboxes");
                 if (mod == null || !mod.enabled) return;
+                diagLog(context);
 
                 // configurable render rate (perf scaling) - positions come from
                 // extracted render states, so they stay smooth at any rate.
@@ -254,14 +255,53 @@ public final class HitboxRenderer {
         consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, a).setNormal(nx, ny, nz).setLineWidth(width);
     }
 
+    private static final org.slf4j.Logger DIAG_LOG = org.slf4j.LoggerFactory.getLogger("MoidClient");
+    private static int diagCounter = 0;
+
+    /** Temporary diagnostic: proves what the 26.2 render states carry. Remove once settled. */
+    private static void diagLog(LevelRenderContext context) {
+        if ((diagCounter++ % 200) != 0) return;
+        try {
+            var list = context.levelState().entityRenderStates;
+            String sample = "none";
+            if (!list.isEmpty()) {
+                var s = list.get(0);
+                sample = "type=" + s.entityType + " w=" + s.boundingBoxWidth + " h=" + s.boundingBoxHeight
+                        + " distSq=" + s.distanceToCameraSq + " xyz=" + s.x + "," + s.y + "," + s.z;
+            }
+            DIAG_LOG.info("[MoidClient][HitboxDiag] states={} sample=[{}]", list.size(), sample);
+        } catch (Exception e) {
+            DIAG_LOG.info("[MoidClient][HitboxDiag] err {}", String.valueOf(e));
+        }
+    }
+
+    private static java.lang.reflect.Method cachedBufferSource = null;
+    private static java.lang.reflect.Method cachedGetBuffer = null;
+    private static boolean immediateProbed = false;
+    private static boolean immediateAvailable = false;
+
     private static VertexConsumer immediateBuffer(LevelRenderContext context, float alpha) {
         try {
-            java.lang.reflect.Method m = context.getClass().getMethod("bufferSource");
-            Object source = m.invoke(context);
-            java.lang.reflect.Method g = source.getClass().getMethod("getBuffer", RenderType.class);
+            if (!immediateProbed) {
+                try {
+                    cachedBufferSource = context.getClass().getMethod("bufferSource");
+                    immediateAvailable = true;
+                } catch (Exception e) {
+                    immediateProbed = true;
+                    immediateAvailable = false;
+                    return null;
+                }
+                immediateProbed = true;
+            }
+            if (!immediateAvailable) return null;
+            Object source = cachedBufferSource.invoke(context);
+            if (cachedGetBuffer == null) {
+                cachedGetBuffer = source.getClass().getMethod("getBuffer", RenderType.class);
+            }
             RenderType type = alpha >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent();
-            return (VertexConsumer) g.invoke(source, type);
+            return (VertexConsumer) cachedGetBuffer.invoke(source, type);
         } catch (Exception e) {
+            immediateAvailable = false;
             return null;
         }
     }

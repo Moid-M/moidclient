@@ -50,6 +50,9 @@
       <div data-tab="visuals" class="sidebar-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12a5 5 0 0 1 5-5"/><path d="M2 12a5 5 0 0 0 5 5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v4M12 18v4"/></svg> Visuals
       </div>
+      <div data-tab="utility" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg> Utilities
+      </div>
       <div data-tab="keybinds" class="sidebar-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h8M6 16h.01M10 16h.01M14 16h.01M18 16h.01"/></svg> Keybinds
       </div>
@@ -69,6 +72,7 @@
     <button data-tab="editor" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Editor</button>
     <button data-tab="hud" class="tab-m active px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%, transparent)">HUD</button>
     <button data-tab="visuals" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Visuals</button>
+    <button data-tab="utility" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Utils</button>
     <button data-tab="keybinds" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Keybinds</button>
     <button data-tab="theme" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Theme</button>
   </div>
@@ -142,6 +146,12 @@
       <h2 class="text-[18px] font-semibold">Visuals</h2>
       <p class="text-xs" style="color:var(--text-muted)">Visual enhancements — Sodium handles performance.</p>
       <div id="visualsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+    </section>
+
+    <section id="tab-utility" class="tab-panel hidden space-y-4">
+      <h2 class="text-[18px] font-semibold">Utilities</h2>
+      <p class="text-xs" style="color:var(--text-muted)">Small gameplay helpers.</p>
+      <div id="utilitiesGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
     </section>
 
     <section id="tab-keybinds" class="tab-panel hidden space-y-4">

@@ -10,6 +10,8 @@ public final class LiveStats {
     public final int fps;
     public final int cpsLeft;
     public final int cpsRight;
+    public final int peakLeft;
+    public final int peakRight;
     public final boolean w;
     public final boolean a;
     public final boolean s;
@@ -20,12 +22,15 @@ public final class LiveStats {
     public final boolean rmb;
 
     public LiveStats(int ping, int fps, int cpsLeft, int cpsRight,
+                     int peakLeft, int peakRight,
                      boolean w, boolean a, boolean s, boolean d,
                      boolean space, boolean shift, boolean lmb, boolean rmb) {
         this.ping = ping;
         this.fps = fps;
         this.cpsLeft = cpsLeft;
         this.cpsRight = cpsRight;
+        this.peakLeft = peakLeft;
+        this.peakRight = peakRight;
         this.w = w;
         this.a = a;
         this.s = s;

@@ -62,19 +62,39 @@ public final class BlockOutlineRenderer {
         };
     }
 
+    private static java.lang.reflect.Method cachedBufferSource = null;
+    private static java.lang.reflect.Method cachedGetBuffer = null;
+    private static boolean immediateProbed = false;
+    private static boolean immediateAvailable = false;
+
     /**
      * Immediate line buffer when the platform offers one (26.1). Resolved via
-     * reflection so the same source also compiles where it doesn't exist -
-     * returns null there and the caller uses the submit pipeline instead.
+     * reflection (lookups cached) so the same source also compiles where it
+     * doesn't exist - returns null there and the caller uses the submit
+     * pipeline instead.
      */
     private static VertexConsumer immediateLinesBuffer(LevelRenderContext context, float alpha) {
         try {
-            java.lang.reflect.Method m = context.getClass().getMethod("bufferSource");
-            Object source = m.invoke(context);
-            java.lang.reflect.Method g = source.getClass().getMethod("getBuffer", RenderType.class);
+            if (!immediateProbed) {
+                try {
+                    cachedBufferSource = context.getClass().getMethod("bufferSource");
+                    immediateAvailable = true;
+                } catch (Exception e) {
+                    immediateProbed = true;
+                    immediateAvailable = false;
+                    return null;
+                }
+                immediateProbed = true;
+            }
+            if (!immediateAvailable) return null;
+            Object source = cachedBufferSource.invoke(context);
+            if (cachedGetBuffer == null) {
+                cachedGetBuffer = source.getClass().getMethod("getBuffer", RenderType.class);
+            }
             RenderType type = alpha >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent();
-            return (VertexConsumer) g.invoke(source, type);
+            return (VertexConsumer) cachedGetBuffer.invoke(source, type);
         } catch (Exception e) {
+            immediateAvailable = false;
             return null;
         }
     }

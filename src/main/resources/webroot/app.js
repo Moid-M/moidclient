@@ -1,5 +1,5 @@
 ﻿// Moid Client - HUD Editor + inline pickers, center fix, drag fix, no X/Y in card
-const MOID_APP_VERSION='1.0.5-greydefault';
+const MOID_APP_VERSION='1.1.0-dev';
 console.log('[MoidClient] app.js '+MOID_APP_VERSION);
 const PRESETS = [
   { name: 'Electric Violet', hex: '#8B5CF6' },
@@ -663,20 +663,21 @@ function enterFocus(id){ focusedId=id; render(false); setTimeout(()=>{ const el=
 function exitFocus(){ focusedId=null; render(false); }
 function render(animate=false){
   const shouldAnimate = animate && !hasInitialRendered;
-  const hudGrid=$('#hudGrid'), visualsGrid=$('#visualsGrid'), allGrid=$('#allGrid'); if(!hudGrid||!visualsGrid) return;
-  hudGrid.innerHTML=''; visualsGrid.innerHTML=''; if(allGrid) allGrid.innerHTML='';
+  const hudGrid=$('#hudGrid'), visualsGrid=$('#visualsGrid'), utilitiesGrid=$('#utilitiesGrid'), allGrid=$('#allGrid'); if(!hudGrid||!visualsGrid||!utilitiesGrid) return;
+  hudGrid.innerHTML=''; visualsGrid.innerHTML=''; utilitiesGrid.innerHTML=''; if(allGrid) allGrid.innerHTML='';
   if(!MODULE_ORDER.length){
     if(hudGrid) hudGrid.innerHTML=defsNoticeHtml();
     hasInitialRendered=true;
     return;
   }
+  const gridsByCat={hud:hudGrid, visuals:visualsGrid, utility:utilitiesGrid};
   const allIds=MODULE_ORDER;
   for(const id of allIds){
     if(focusedId && focusedId!==id) continue;
     const meta=MODULES_META[id];
     const data=(config.modules&&config.modules[id])||{enabled:false,x:10,y:10,scale:1,opacity:1};
     const html=cardTemplate(id,meta,data,shouldAnimate);
-    const target=meta.cat==='visuals'?visualsGrid:hudGrid;
+    const target=gridsByCat[meta.cat]||hudGrid;
     target.insertAdjacentHTML('beforeend',html);
   }
   // all tab - grouped into foldable category sections, filtered by search
@@ -746,9 +747,9 @@ function render(animate=false){
   }
   if(focusedId){
     const cat=MODULES_META[focusedId].cat;
-    if(cat==='hud') visualsGrid.parentElement.style.display='none'; else hudGrid.parentElement.style.display='none';
+    for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display=(k===cat)?'':'none';
   } else {
-    visualsGrid.parentElement.style.display=''; hudGrid.parentElement.style.display='';
+    for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display='';
   }
   const hudCountEl=document.querySelector('#hudCount');
   if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
@@ -761,7 +762,7 @@ function render(animate=false){
       const next=!cur.enabled;
       cur.enabled=next;
       el.classList.toggle('active',next);
-      const card=document.querySelector(`[data-id="${id}"]`);
+      const card=el.closest('.card');
       if(card){ card.style.transform='scale(1.015)'; setTimeout(()=>card.style.transform='',160); }
       if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
       send({type:'UPDATE_MODULE',id,data:{enabled:next}});
@@ -784,7 +785,7 @@ function render(animate=false){
       if(!Object.keys(patch).length) return;
       send({type:'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]={...cur, ...patch};
-      const card=document.querySelector(`[data-id="${id}"]`);
+      const card=b.closest('.card');
       if(card){
         card.querySelectorAll('input[data-field]').forEach(inp=>{
           const f=inp.getAttribute('data-field');
@@ -808,7 +809,7 @@ function render(animate=false){
       const next=!cur.background;
       cur.background=next; el.classList.toggle('active', next);
       lastBgToggle=Date.now();
-      const sec=document.querySelector(`[data-bg-section="${id}"]`); if(sec) sec.classList.toggle('hidden', !next);
+      const sec=el.closest('.card')?.querySelector(`[data-bg-section="${id}"]`); if(sec) sec.classList.toggle('hidden', !next);
       send({type:'UPDATE_MODULE', id, data:{background: next}});
     };
   });
@@ -890,7 +891,7 @@ function render(animate=false){
       else val=inp.value;
       const patch={}; patch[field]=val; send({type:'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]=config.modules[id]||{x:10,y:10,scale:1,opacity:1,enabled:false}; m[field]=val;
-      const card=document.querySelector(`[data-id="${id}"]`);
+      const card=inp.closest('.card');
       if(card){
         if(isRange) updateSliderFill(inp);
         const lbl=card.querySelector(`[data-opt-label="${id}:${field}"]`);
@@ -910,7 +911,7 @@ function render(animate=false){
         handler();
         updateSliderFill(inp);
         const id=inp.getAttribute('data-id'); const field=inp.getAttribute('data-field');
-        const card=document.querySelector(`[data-id="${id}"]`);
+        const card=inp.closest('.card');
         if(card){
           const lbl=card.querySelector(`[data-opt-label="${id}:${field}"]`);
           if(lbl) lbl.textContent = field==='scale' ? parseFloat(inp.value).toFixed(2)+'x' : parseFloat(inp.value).toFixed(2);

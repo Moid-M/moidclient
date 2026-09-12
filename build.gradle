@@ -38,6 +38,7 @@ dependencies {
     shadow "io.javalin:javalin:6.3.0"
     implementation "io.javalin:javalin:6.3.0"
     // Gson is provided by Minecraft, no extra dep needed
+    testImplementation "junit:junit:4.13.2"
 }
 
 processResources {

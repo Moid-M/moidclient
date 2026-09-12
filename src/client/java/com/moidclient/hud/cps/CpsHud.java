@@ -91,6 +91,14 @@ public final class CpsHud {
         return rightClicks.size();
     }
 
+    public static int getPeakLeft() {
+        return peakLeft;
+    }
+
+    public static int getPeakRight() {
+        return peakRight;
+    }
+
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {
         if (config == null) return;
         ConfigManager.ModuleConfig mod = config.getModule("cpsCounter");
@@ -144,6 +152,10 @@ public final class CpsHud {
 
     /** Shared text builder used by both the in-game HUD and the dashboard preview. */
     public static String formatText(ConfigManager.ModuleConfig mod, int left, int right) {
+        return formatText(mod, left, right, peakLeft, peakRight);
+    }
+
+    public static String formatText(ConfigManager.ModuleConfig mod, int left, int right, int peakLeft, int peakRight) {
         String mode = mod.cpsMode != null ? mod.cpsMode : "both";
         String fmt = mod.format;
         if (fmt == null || fmt.isEmpty()) {
@@ -171,6 +183,9 @@ public final class CpsHud {
         String text = fmt.replace("{left}", String.valueOf(left))
                          .replace("{right}", String.valueOf(right))
                          .replace("{cps}", String.valueOf(Math.max(left, right)))
+                         .replace("{peak}", String.valueOf(Math.max(peakLeft, peakRight)))
+                         .replace("{peakLeft}", String.valueOf(peakLeft))
+                         .replace("{peakRight}", String.valueOf(peakRight))
                          .replace("{l}", String.valueOf(left))
                          .replace("{r}", String.valueOf(right))
                          .replace("{value}", String.valueOf(left))
@@ -196,7 +211,9 @@ public final class CpsHud {
         if (mod == null) return null;
         int left = stats != null ? stats.cpsLeft : 0;
         int right = stats != null ? stats.cpsRight : 0;
-        return com.moidclient.module.ModulePreview.text("cpsCounter", formatText(mod, left, right));
+        int peakL = stats != null ? stats.peakLeft : 0;
+        int peakR = stats != null ? stats.peakRight : 0;
+        return com.moidclient.module.ModulePreview.text("cpsCounter", formatText(mod, left, right, peakL, peakR));
     }
 
     private static int colorForCps(int cps, double opacity) {
