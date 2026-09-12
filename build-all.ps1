@@ -12,6 +12,10 @@ Set-Location -LiteralPath $root
 
 $propsFile = Join-Path $root "gradle.properties"
 $backup = Join-Path $root "gradle.properties.buildall-bak"
+if (Test-Path -LiteralPath $backup) {
+  Write-Warning "Stale backup found (previous run was killed?) - restoring it first."
+  Move-Item -LiteralPath $backup -Destination $propsFile -Force
+}
 Copy-Item -LiteralPath $propsFile -Destination $backup -Force
 New-Item -ItemType Directory -Path (Join-Path $root "dist") -Force | Out-Null
 

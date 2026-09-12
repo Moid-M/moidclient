@@ -26,7 +26,7 @@ import java.net.URI;
 
 /**
  * Fabric ClientModInitializer.
- * Registers keybind K / Right Shift to open Web GUI in default browser.
+ * Registers keybind K to open the Web GUI in the default browser.
  * Starts embedded server on dynamic port 18423-18450.
  */
 public class ClientMod implements ClientModInitializer {
@@ -63,18 +63,13 @@ public class ClientMod implements ClientModInitializer {
             LOGGER.error("[MoidClient] Failed to start Web GUI server", e);
         }
 
-        // 3) Keybind registration - default K (also allow Right Shift via second binding fallback)
-        // 26.1: KeyMappingHelper.registerKeyMapping + InputConstants (Mojang mappings)
-        // For 1.21.1 fallback use: KeyBindingHelper.registerKeyBinding + InputUtil.Type.KEYSYM
+        // 3) Keybind registration - default K
         openGuiKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.moidclient.openGui",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
                 KeyMapping.Category.register(Identifier.parse("moidclient:main"))
         ));
-
-        // Also register Right Shift as alternative if user prefers - use event to listen both
-        // GLFW_RIGHT_SHIFT = 344, but InputUtil handles it
 
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             try { PerspectiveSkipManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] PerspectiveSkip tick failed", e); }

@@ -18,6 +18,7 @@ fabric.mod.json.bak
 github-token.txt
 *token*.txt
 *.bak
+*.buildall-bak
 *.zip
 src-backup-*.zip
 .vscode/

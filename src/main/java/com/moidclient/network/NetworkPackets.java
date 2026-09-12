@@ -120,11 +120,25 @@ public class NetworkPackets {
         broadcastSync();
     }
 
+    /** Send to one session; a dead session is dropped instead of breaking the broadcast loop. */
+    private boolean sendSafe(WsContext ctx, String msg) {
+        try {
+            if (ctx.session.isOpen()) {
+                ctx.send(msg);
+                return true;
+            }
+        } catch (Exception e) {
+            LOGGER.debug("[MoidClient] WS send failed, dropping session {}", ctx.sessionId());
+        }
+        sessions.remove(ctx);
+        return false;
+    }
+
     public void sendSync(WsContext ctx) {
         JsonObject payload = new JsonObject();
         payload.addProperty("type", "SYNC_CONFIG");
         payload.add("data", config.toJson());
-        ctx.send(payload.toString());
+        sendSafe(ctx, payload.toString());
     }
 
     public void broadcastSync() {
@@ -132,10 +146,8 @@ public class NetworkPackets {
         payload.addProperty("type", "SYNC_CONFIG");
         payload.add("data", config.toJson());
         String msg = payload.toString();
-        for (WsContext s : sessions) {
-            if (s.session.isOpen()) {
-                s.send(msg);
-            }
+        for (WsContext s : sessions.toArray(new WsContext[0])) {
+            sendSafe(s, msg);
         }
     }
 
@@ -151,10 +163,8 @@ public class NetworkPackets {
         payload.addProperty("type", "WINDOW_SIZE");
         payload.add("data", data);
         String msg = payload.toString();
-        for (WsContext s : sessions) {
-            if (s.session.isOpen()) {
-                s.send(msg);
-            }
+        for (WsContext s : sessions.toArray(new WsContext[0])) {
+            sendSafe(s, msg);
         }
     }
 
@@ -179,10 +189,8 @@ public class NetworkPackets {
         payload.addProperty("type", "LIVE_STATS");
         payload.add("data", data);
         String msg = payload.toString();
-        for (WsContext wsCtx : sessions) {
-            if (wsCtx.session.isOpen()) {
-                wsCtx.send(msg);
-            }
+        for (WsContext wsCtx : sessions.toArray(new WsContext[0])) {
+            sendSafe(wsCtx, msg);
         }
     }
     // legacy overload

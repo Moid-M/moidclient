@@ -26,7 +26,7 @@ Requires **Java 25** (Temurin 25+). One jar per Minecraft version — pick the o
 1. Install [Fabric Loader](https://fabricmc.net/use/) for your Minecraft version (26.1 or 26.2).
 2. Download the matching jar from [Releases](../../releases) (`Moid-Client-v1.0.0+26.1.jar` or `Moid-Client-v1.0.0+26.2.jar`).
 3. Drop it into your `.minecraft/mods` folder (with `fabric-api` if not already present).
-4. Launch Minecraft. Moid starts a local webserver — press `K` (or check console/chat) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
+4. Launch Minecraft. Moid starts a local webserver — press `K` (or check the game log) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
 
 Config at `.minecraft/config/moidclient.json` (`run/config/moidclient.json` in dev).
 
@@ -46,7 +46,7 @@ drift into the prose sections above.
 | Keystrokes | HUD | Displays currently pressed movement/action keys | ✅ |
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
 | Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
-| Perspective Skip | Utility | F5 jumps first-person straight to front-facing, skipping third-person-back | ✅ |
+| Perspective Skip | Utility | F5 skips a third-person view — back or front, selectable | ✅ |
 | Custom Hitboxes | Visuals | Always-on entity hitboxes with per-group colors, eye lines | ✅ |
 
 **Planned / in progress:**
@@ -95,7 +95,7 @@ Per-version jars for every supported Minecraft version:
 
 ## Contributing
 
-Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer and `ConfigManager.ModuleConfig` fields — the dashboard cards and `/api/modules` pick it up automatically, no frontend changes needed.
+Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer, a `preview()` for the HUD editor, and `ConfigManager.ModuleConfig` fields — the dashboard cards, `/api/modules`, and editor previews pick it up automatically, no frontend changes needed.
 
 ## License
 
