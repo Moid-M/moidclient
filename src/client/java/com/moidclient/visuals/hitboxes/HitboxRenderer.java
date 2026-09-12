@@ -6,23 +6,28 @@ import com.moidclient.config.ConfigManager;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.util.Util;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * Custom Hitboxes - always-on entity hitboxes without F3+B clutter.
  * Per-group colors, opacity, thickness, eye-direction lines, range cap.
- * No mixins: draws at BEFORE_GIZMOS with the same dual-path line output
- * as the block outline (immediate buffer on 26.1, submit pipeline on 26.2+).
+ * No mixins: draws at BEFORE_GIZMOS from live entities with manually
+ * interpolated positions (tick time is tracked locally, so this is smooth
+ * on every supported version without version-specific mappings).
  * Visual only - never touches actual collision or hit detection.
  * Category: Visuals
  */
@@ -32,7 +37,7 @@ public final class HitboxRenderer {
     public static ModuleDef definition() {
         return new ModuleDef("hitboxes", "Custom Hitboxes",
                 "Always-on entity hitboxes with per-group colors.",
-                "visuals", false, "target", false,
+                "visuals", false,
             ModuleOption.list(
                 ModuleOption.bool("hitboxPlayers", "Players"),
                 ModuleOption.color("hitboxPlayersColor", "Player color"),
@@ -54,28 +59,22 @@ public final class HitboxRenderer {
     }
 
     private static int frameCounter = 0;
+    private static volatile long lastTickMs = 0;
+    private static final org.slf4j.Logger DIAG_LOG = org.slf4j.LoggerFactory.getLogger("MoidClient");
+    private static int diagCounter = 0;
 
     public static void register(ConfigManager config) {
-        LevelRenderEvents.BEFORE_GIZMOS.register(context -> renderAtStage(context, config, "gizmos"));
-        LevelRenderEvents.AFTER_SOLID_FEATURES.register(context -> renderAtStage(context, config, "solid"));
-        LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(context -> renderAtStage(context, config, "translucent"));
-        LevelRenderEvents.END_MAIN.register(context -> renderAtStage(context, config, "end"));
-        LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, state) -> {
-            renderAtStage(context, config, "outline");
-            return true;
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            lastTickMs = Util.getMillis();
         });
-    }
-
-    // TEMPORARY multi-stage probe: draws wherever the states list is populated
-    // so one test run reveals the working stage. Will be trimmed to one stage.
-    private static void renderAtStage(LevelRenderContext context, ConfigManager config, String stage) {
+        LevelRenderEvents.BEFORE_GIZMOS.register(context -> {
             try {
                 if (config == null) return;
                 ConfigManager.ModuleConfig mod = config.getModule("hitboxes");
                 if (mod == null || !mod.enabled) return;
 
-                // configurable render rate (perf scaling) - positions come from
-                // extracted render states, so they stay smooth at any rate.
+                // configurable render rate (perf scaling) - positions are
+                // interpolated below, so they stay smooth at any rate.
                 int skip = 1;
                 if ("Every 2nd frame".equals(mod.hitboxRenderRate)) skip = 2;
                 else if ("Every 3rd frame".equals(mod.hitboxRenderRate)) skip = 3;
@@ -89,75 +88,78 @@ public final class HitboxRenderer {
                 double padding = Math.max(0.0, Math.min(0.5, mod.hitboxPadding));
                 double eyeLen = Math.max(1.0, Math.min(5.0, mod.hitboxEyeLength <= 0 ? 2.0 : mod.hitboxEyeLength));
 
+                Minecraft mc = Minecraft.getInstance();
+                if (mc == null || mc.level == null) return;
                 Vec3 cam = context.levelState().cameraRenderState.pos;
-                var states = context.levelState().entityRenderStates;
-                if (!states.isEmpty() || (diagCounter++ % 300) == 0) {
-                    String sample = "none";
-                    if (!states.isEmpty()) {
-                        var s0 = states.get(0);
-                        sample = "type=" + s0.entityType + " w=" + s0.boundingBoxWidth + " h=" + s0.boundingBoxHeight
-                                + " distSq=" + s0.distanceToCameraSq;
-                    }
-                    DIAG_LOG.info("[MoidClient][HitboxDiag] stage={} states={} sample=[{}]", stage, states.size(), sample);
-                }
+                Entity viewEntity = mc.getCameraEntity();
+                float partial = tickPartial();
 
-                for (EntityRenderState state : states) {
+                int n = 0;
+                String sample = "none";
+                for (Entity entity : mc.level.entitiesForRendering()) {
                     try {
-                        if (state == null) continue;
-                        if (state.distanceToCameraSq > rangeSq) continue;
-                        if (state instanceof LivingEntityRenderState living && living.deathTime > 0) continue;
+                        if (entity == null || entity.isRemoved()) continue;
+                        if (entity == viewEntity) continue;
+                        n++;
+                        if (n == 1) {
+                            sample = entity.getType().toString()
+                                    + " xyz=" + entity.getX() + "," + entity.getY() + "," + entity.getZ();
+                        }
+                        double ix = Mth.lerp(partial, entity.xo, entity.getX());
+                        double iy = Mth.lerp(partial, entity.yo, entity.getY());
+                        double iz = Mth.lerp(partial, entity.zo, entity.getZ());
+                        double dx = ix - cam.x, dy = iy - cam.y, dz = iz - cam.z;
+                        if (dx * dx + dy * dy + dz * dz > rangeSq) continue;
+                        if (entity instanceof LivingEntity living && !living.isAlive()) continue;
 
-                        String hex = groupColor(state, mod);
+                        String hex = groupColor(entity, mod);
                         if (hex == null) continue;
                         float[] rgb = parse(hex);
                         if (rgb == null) continue;
 
-                        // skip our own player box when the camera sits inside it
-                        if (isPlayer(state) && state.distanceToCameraSq < 4.0) continue;
-
-                        double w = state.boundingBoxWidth + padding * 2;
-                        double h = state.boundingBoxHeight + padding * 2;
+                        AABB shape = entity.getBoundingBox();
+                        double w = shape.maxX - shape.minX + padding * 2;
+                        double h = shape.maxY - shape.minY + padding * 2;
                         AABB box = new AABB(
-                                state.x - w / 2, state.y - padding, state.z - w / 2,
-                                state.x + w / 2, state.y - padding + h, state.z + w / 2);
+                                ix - w / 2, iy - padding, iz - w / 2,
+                                ix + w / 2, iy - padding + h, iz + w / 2);
                         drawBox(context, box, cam, rgb[0], rgb[1], rgb[2], alpha, width);
 
-                        if (mod.hitboxEyeLine && state instanceof LivingEntityRenderState living) {
-                            double eyeY = state.y + state.eyeHeight;
-                            double yR = Math.toRadians(living.yRot);
-                            double xR = Math.toRadians(living.xRot);
-                            double lx = -Math.sin(yR) * Math.cos(xR);
-                            double ly = -Math.sin(xR);
-                            double lz = Math.cos(yR) * Math.cos(xR);
+                        if (mod.hitboxEyeLine && entity instanceof LivingEntity living) {
+                            Vec3 eyeTick = living.getEyePosition();
+                            Vec3 look = living.getLookAngle();
+                            double ex = eyeTick.x + (ix - entity.getX());
+                            double ey = eyeTick.y + (iy - entity.getY());
+                            double ez = eyeTick.z + (iz - entity.getZ());
                             drawSegment(context,
-                                    state.x, eyeY, state.z,
-                                    state.x + lx * eyeLen, eyeY + ly * eyeLen, state.z + lz * eyeLen,
+                                    ex, ey, ez,
+                                    ex + look.x * eyeLen, ey + look.y * eyeLen, ez + look.z * eyeLen,
                                     cam, rgb[0], rgb[1], rgb[2], alpha, width);
                         }
                     } catch (Exception ignored) {}
                 }
+                if ((diagCounter++ % 300) == 0) {
+                    DIAG_LOG.info("[MoidClient][HitboxDiag] live={} sample=[{}]", n, sample);
+                }
             } catch (Exception ignored) {}
+        });
     }
 
-    private static boolean isPlayer(EntityRenderState state) {
-        try {
-            EntityType<?> t = state.entityType;
-            if (t == null) return false;
-            return BuiltInRegistries.ENTITY_TYPE.getKey(t).toString().equals("minecraft:player");
-        } catch (Exception e) {
-            return false;
+    /** Frame progress since the last client tick (0-1) for manual interpolation. */
+    private static float tickPartial() {
+        long last = lastTickMs;
+        if (last == 0) return 1f;
+        return (float) Math.max(0.0, Math.min(1.0, (Util.getMillis() - last) / 50.0));
+    }
+
+    private static String groupColor(Entity entity, ConfigManager.ModuleConfig mod) {
+        if (entity instanceof Player) {
+            return mod.hitboxPlayers ? mod.hitboxPlayersColor : null;
         }
-    }
-
-    private static String groupColor(EntityRenderState state, ConfigManager.ModuleConfig mod) {
-        if (isPlayer(state)) return mod.hitboxPlayers ? mod.hitboxPlayersColor : null;
-        EntityType<?> t = state.entityType;
-        if (t == null) return mod.hitboxOther ? mod.hitboxOtherColor : null;
-        MobCategory c = t.getCategory();
-        if (c == MobCategory.MONSTER) return mod.hitboxHostiles ? mod.hitboxHostilesColor : null;
-        if (c == MobCategory.CREATURE || c == MobCategory.AMBIENT
-                || c == MobCategory.WATER_AMBIENT || c == MobCategory.WATER_CREATURE
-                || c == MobCategory.UNDERGROUND_WATER_CREATURE || c == MobCategory.AXOLOTLS) {
+        if (entity instanceof Enemy) {
+            return mod.hitboxHostiles ? mod.hitboxHostilesColor : null;
+        }
+        if (entity instanceof Animal) {
             return mod.hitboxPassives ? mod.hitboxPassivesColor : null;
         }
         return mod.hitboxOther ? mod.hitboxOtherColor : null;
@@ -274,9 +276,6 @@ public final class HitboxRenderer {
         consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, a).setNormal(nx, ny, nz).setLineWidth(width);
         consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, a).setNormal(nx, ny, nz).setLineWidth(width);
     }
-
-    private static final org.slf4j.Logger DIAG_LOG = org.slf4j.LoggerFactory.getLogger("MoidClient");
-    private static int diagCounter = 0;
 
     private static java.lang.reflect.Method cachedBufferSource = null;
     private static java.lang.reflect.Method cachedGetBuffer = null;
