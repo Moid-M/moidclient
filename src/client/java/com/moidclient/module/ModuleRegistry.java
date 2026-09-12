@@ -7,6 +7,7 @@ import com.moidclient.hud.keystrokes.KeystrokesHud;
 import com.moidclient.hud.ping.PingHud;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
+import com.moidclient.visuals.hitboxes.HitboxRenderer;
 import com.moidclient.visuals.fullbright.FullbrightManager;
 
 import java.util.List;
@@ -27,7 +28,8 @@ public final class ModuleRegistry {
             KeystrokesHud.definition(),
             FullbrightManager.definition(),
             BlockOutlineRenderer.definition(),
-            PerspectiveSkipManager.definition()
+            PerspectiveSkipManager.definition(),
+            HitboxRenderer.definition()
         );
     }
 

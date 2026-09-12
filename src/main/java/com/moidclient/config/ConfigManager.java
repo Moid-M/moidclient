@@ -76,6 +76,19 @@ public class ConfigManager {
         public boolean blockOutlineFade = false; // animated gradient to second color
         public String blockOutlineColor2 = null; // null = solid color1
         public String blockOutlineMode = "block"; // block (full outline) or face (targeted face only)
+        // custom hitboxes specific
+        public boolean hitboxPlayers = true;
+        public String hitboxPlayersColor = "#06B6D4";
+        public boolean hitboxHostiles = true;
+        public String hitboxHostilesColor = "#EF4444";
+        public boolean hitboxPassives = true;
+        public String hitboxPassivesColor = "#22C55E";
+        public boolean hitboxOther = false;
+        public String hitboxOtherColor = "#9CA3AF";
+        public boolean hitboxEyeLine = true;
+        public double hitboxWidth = 2.0; // 1-5
+        public double hitboxOpacity = 0.9; // 0.1-1
+        public double hitboxRange = 64.0; // 16-128 blocks
         // perspective skip specific
         public String perspectiveSkipMode = "skipBack"; // skipBack (F5 skips third-person-back) or skipFront (F5 skips front-facing)
 
@@ -191,6 +204,7 @@ public class ConfigManager {
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
         // removed: testModule, armorStatus, fpsBoost (not implemented)
     }
 
@@ -240,6 +254,15 @@ public class ConfigManager {
             if (e.getKey().equals("blockOutline")) {
                 if (c.blockOutlineWidth == 0) c.blockOutlineWidth = 2.0;
                 c.blockOutlineWidth = Math.max(1.0, Math.min(5.0, c.blockOutlineWidth));
+            }
+            // hitboxes ranges
+            if (e.getKey().equals("hitboxes")) {
+                if (c.hitboxWidth == 0) c.hitboxWidth = 2.0;
+                c.hitboxWidth = Math.max(1.0, Math.min(5.0, c.hitboxWidth));
+                if (c.hitboxOpacity == 0) c.hitboxOpacity = 0.9;
+                c.hitboxOpacity = Math.max(0.1, Math.min(1.0, c.hitboxOpacity));
+                if (c.hitboxRange == 0) c.hitboxRange = 64.0;
+                c.hitboxRange = Math.max(16.0, Math.min(128.0, c.hitboxRange));
             }
         }
         ModuleConfig ping = modules.get("ping");
@@ -402,6 +425,25 @@ public class ConfigManager {
         if (data.has("perspectiveSkipMode") && !data.get("perspectiveSkipMode").isJsonNull()) {
             String m = data.get("perspectiveSkipMode").getAsString();
             if (m.equals("skipBack") || m.equals("skipFront")) cfg.perspectiveSkipMode = m;
+        }
+        if (data.has("hitboxPlayers")) cfg.hitboxPlayers = data.get("hitboxPlayers").getAsBoolean();
+        if (data.has("hitboxHostiles")) cfg.hitboxHostiles = data.get("hitboxHostiles").getAsBoolean();
+        if (data.has("hitboxPassives")) cfg.hitboxPassives = data.get("hitboxPassives").getAsBoolean();
+        if (data.has("hitboxOther")) cfg.hitboxOther = data.get("hitboxOther").getAsBoolean();
+        if (data.has("hitboxEyeLine")) cfg.hitboxEyeLine = data.get("hitboxEyeLine").getAsBoolean();
+        if (data.has("hitboxWidth")) cfg.hitboxWidth = data.get("hitboxWidth").getAsDouble();
+        if (data.has("hitboxOpacity")) cfg.hitboxOpacity = data.get("hitboxOpacity").getAsDouble();
+        if (data.has("hitboxRange")) cfg.hitboxRange = data.get("hitboxRange").getAsDouble();
+        for (String colorKey : new String[]{"hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor"}) {
+            if (data.has(colorKey) && !data.get(colorKey).isJsonNull()) {
+                String c = data.get(colorKey).getAsString();
+                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
+                    if (colorKey.equals("hitboxPlayersColor")) cfg.hitboxPlayersColor = c;
+                    else if (colorKey.equals("hitboxHostilesColor")) cfg.hitboxHostilesColor = c;
+                    else if (colorKey.equals("hitboxPassivesColor")) cfg.hitboxPassivesColor = c;
+                    else cfg.hitboxOtherColor = c;
+                }
+            }
         }
         save();
     }

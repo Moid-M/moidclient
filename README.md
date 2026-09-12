@@ -47,12 +47,12 @@ drift into the prose sections above.
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
 | Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
 | Perspective Skip | Utility | F5 jumps first-person straight to front-facing, skipping third-person-back | ✅ |
+| Custom Hitboxes | Visuals | Always-on entity hitboxes with per-group colors, eye lines | ✅ |
 
 **Planned / in progress:**
 
 | Module | Category | Description |
 |---|---|---|
-| Custom Hitboxes | Visuals | Configurable size/color entity hitboxes |
 | Crosshair Customization | HUD | Custom crosshair styles, colors, sizes |
 
 ## How Moid Compares

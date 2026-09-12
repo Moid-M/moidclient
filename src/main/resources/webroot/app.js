@@ -454,9 +454,16 @@ function setupModulePicker(id, field, hex, scopeCard){
       return {r:parseInt(c.substr(0,2),16), g:parseInt(c.substr(2,2),16), b:parseInt(c.substr(4,2),16)};
     }catch(e){ return null; }
   }
+  function alphaField(){
+    if(field==='backgroundColor') return 'backgroundOpacity';
+    if(field==='hitboxPlayersColor'||field==='hitboxHostilesColor'||field==='hitboxPassivesColor'||field==='hitboxOtherColor') return 'hitboxOpacity';
+    return 'opacity';
+  }
   function currentAlphaVal(){
     const m=config.modules[id]||{};
-    if(isBg) return Math.max(0, Math.min(1, m.backgroundOpacity ?? 0.85));
+    const af=alphaField();
+    if(af==='backgroundOpacity') return Math.max(0, Math.min(1, m.backgroundOpacity ?? 0.85));
+    if(af==='hitboxOpacity') return Math.max(0.1, Math.min(1, m.hitboxOpacity ?? 0.9));
     return Math.max(0.2, Math.min(1, m.opacity ?? 1));
   }
   picker._alpha=currentAlphaVal();
@@ -496,10 +503,11 @@ function setupModulePicker(id, field, hex, scopeCard){
 
   function syncAlphaSliderUI(a){
     const cardElx=picker.closest('.card')||scopeCard||document;
-    if(isBg) return; // bg has no slider in card — alpha bar is the control
-    const opInp=(cardElx.querySelector?cardElx.querySelector(`input[data-field="opacity"][data-id="${id}"]`):null);
+    const af=alphaField();
+    if(af==='backgroundOpacity') return; // bg has no slider in card — alpha bar is the control
+    const opInp=(cardElx.querySelector?cardElx.querySelector(`input[data-field="${af}"][data-id="${id}"]`):null);
     if(opInp){ opInp.value=a; updateSliderFill(opInp); }
-    const lbl=(cardElx.querySelector?cardElx.querySelector(`[data-opt-label="${id}:opacity"]`):null);
+    const lbl=(cardElx.querySelector?cardElx.querySelector(`[data-opt-label="${id}:${af}"]`):null);
     if(lbl) lbl.textContent=parseFloat(a).toFixed(2);
   }
   
@@ -517,13 +525,13 @@ function setupModulePicker(id, field, hex, scopeCard){
   paintAlphaLocal();
   let dSv=false, dHue=false, dAlpha=false;
   function pushAlpha(a){
-    a=isBg ? Math.max(0, Math.min(1, a)) : Math.max(0.2, Math.min(1, a));
+    const af=alphaField();
+    a= af==='backgroundOpacity' ? Math.max(0, Math.min(1, a)) : af==='hitboxOpacity' ? Math.max(0.1, Math.min(1, a)) : Math.max(0.2, Math.min(1, a));
     picker._alpha=a;
     if(alphaCur) alphaCur.style.top=((1-a)*100)+'%';
     const m=config.modules[id]=config.modules[id]||{x:10,y:10,scale:1,opacity:1,enabled:false};
     const patch={};
-    if(isBg){ m.backgroundOpacity=a; patch.backgroundOpacity=a; }
-    else{ m.opacity=a; patch.opacity=a; }
+    m[af]=a; patch[af]=a;
     send({type:'UPDATE_MODULE', id, data:patch});
     syncAlphaSliderUI(a);
   }

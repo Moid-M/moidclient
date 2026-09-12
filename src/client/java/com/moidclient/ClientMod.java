@@ -5,6 +5,7 @@ import com.moidclient.hud.HudManager;
 import com.moidclient.hud.cps.CpsHud;
 import com.moidclient.module.ModuleRegistry;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
+import com.moidclient.visuals.hitboxes.HitboxRenderer;
 import com.moidclient.network.NetworkPackets;
 import com.moidclient.server.ServerManager;
 import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
@@ -52,6 +53,7 @@ public class ClientMod implements ClientModInitializer {
         // 1b) HUD (ping display etc) - register before server
         try { HudManager.init(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init HUD", e); }
         try { BlockOutlineRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Block Outline", e); }
+        try { HitboxRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Hitboxes", e); }
 
         // 2) Server (dynamic port binding + asset serving + WS)
         serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson);
