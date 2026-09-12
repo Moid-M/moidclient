@@ -601,6 +601,13 @@ function updateSliderFill(el){
 }
 function escAttr(s){ return String(s ?? '').replace(/"/g, '&quot;'); }
 const PICKER_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.31 0z"/><circle cx="12" cy="12" r="2.2"/></svg>`;
+function pickerPanelHtml(ck, withAlpha){
+  return `<div class="picker-wrap" data-color-picker="${ck}">
+        <div class="sv-box" data-picker-sv="${ck}" style="width:140px;height:90px"><div class="sv-cursor" data-picker-svcur="${ck}"></div></div>
+        <div class="hue-bar" data-picker-hue="${ck}" style="height:90px"><div class="hue-cursor" data-picker-huecur="${ck}"></div></div>
+        ${withAlpha ? `<div class="alpha-bar" data-picker-alpha="${ck}" style="height:90px" title="Transparency"><div class="alpha-cursor" data-picker-alphacur="${ck}"></div></div>` : ''}
+      </div>`;
+}
 function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withAlpha){
   const ck = `${id}:${key}`;
   const dotBg = cur || (key === 'backgroundColor' ? '#1A1B20' : 'transparent');
@@ -613,11 +620,7 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
         ${nullable ? `<button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=${key}]').value=''; this.closest('[data-id]').querySelector('[data-field=${key}]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>` : ''}
         <button class="picker-icon-btn" data-color-picker-toggle="${ck}" title="Color picker">${PICKER_ICON_SVG}</button>
       </div>
-      <div class="picker-wrap" data-color-picker="${ck}">
-        <div class="sv-box" data-picker-sv="${ck}" style="width:140px;height:90px"><div class="sv-cursor" data-picker-svcur="${ck}"></div></div>
-        <div class="hue-bar" data-picker-hue="${ck}" style="height:90px"><div class="hue-cursor" data-picker-huecur="${ck}"></div></div>
-        ${withAlpha ? `<div class="alpha-bar" data-picker-alpha="${ck}" style="height:90px" title="Transparency"><div class="alpha-cursor" data-picker-alphacur="${ck}"></div></div>` : ''}
-      </div>
+      ${pickerPanelHtml(ck, withAlpha)}
     </div>`;
 }
 function optionHtml(id, opt, data){
@@ -631,7 +634,10 @@ function optionHtml(id, opt, data){
         <div class="toggle ${val?'active':''}" data-reveal-toggle="${id}:${key}" data-reveals="${opt.reveals}"><div class="toggle-dot"></div></div>
       </div>`;
     }
-    return `<label class="flex items-center gap-2 text-xs" style="color:var(--text-muted)"><input type="checkbox" ${val ? 'checked' : ''} data-field="${key}" data-id="${id}" class="rounded accent-[var(--accent)]"> ${label}</label>`;
+    return `<div class="flex items-center justify-between gap-3">
+      <span class="text-xs" style="color:var(--text-muted)">${label}</span>
+      <div class="toggle ${val?'active':''}" data-bool-toggle="${id}:${key}"><div class="toggle-dot"></div></div>
+    </div>`;
   }
   if(type === 'slider'){
     const min = opt.min ?? 0, max = opt.max ?? 1, step = opt.step ?? 0.01;
@@ -658,11 +664,35 @@ function cardTemplate(id,meta,data,animate){
   const overlay = !!meta.overlay;
   const revealedBy = {};
   for(const o of (meta.options||[])) if(o.reveals) revealedBy[o.reveals]=o.key;
-  const opts = (meta.options||[]).map(o=>{
-    const html=optionHtml(id,o,data);
-    if(revealedBy[o.key]) return `<div class="reveal-wrap ${data[revealedBy[o.key]]?'open':''}" data-reveal-wrap="${id}:${o.key}">${html}</div>`;
-    return html;
-  }).join('');
+  // bool + matching color (e.g. hitboxPlayers + hitboxPlayersColor) render as
+  // one compact group row instead of two separate controls.
+  const optHtml = (o)=>optionHtml(id,o,data);
+  let opts = '';
+  const mopts = meta.options||[];
+  for(let i=0;i<mopts.length;i++){
+    const o=mopts[i], n=mopts[i+1];
+    if(o.type==='boolean' && !o.reveals && n && n.type==='color' && n.key===o.key+'Color'){
+      const cur=data[n.key]||'';
+      const ck=`${id}:${n.key}`;
+      const dotBg=cur||'#9CA3AF';
+      const checker=(!cur)?'background: repeating-conic-gradient(#999 0% 25%, white 0% 50%) 50% / 8px 8px':'';
+      opts += `<div class="space-y-2">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full border shrink-0" style="background:${dotBg};border-color:var(--border); ${checker}" data-color-preview="${ck}"></div>
+          <span class="text-xs font-medium flex-1 truncate" style="color:var(--text-muted)">${o.label||o.key}</span>
+          <button class="picker-icon-btn" data-color-picker-toggle="${ck}" title="Color picker">${PICKER_ICON_SVG}</button>
+          <div class="toggle ${data[o.key]?'active':''}" data-bool-toggle="${id}:${o.key}"><div class="toggle-dot"></div></div>
+        </div>
+        <input data-field="${n.key}" data-id="${id}" value="${escAttr(cur)}" placeholder="${escAttr(n.placeholder||'#RRGGBB')}" spellcheck="false" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
+        ${pickerPanelHtml(ck, true)}
+      </div>`;
+      i++;
+      continue;
+    }
+    const html=optHtml(o);
+    if(revealedBy[o.key]) opts += `<div class="reveal-wrap ${data[revealedBy[o.key]]?'open':''}" data-reveal-wrap="${id}:${o.key}">${html}</div>`;
+    else opts += html;
+  }
   return `<div class="card p-4 flex flex-col gap-3 ${isFocused?'focused':''} ${enterClass}" data-id="${id}" style="${animate?`animation-delay:${Math.random()*60}ms`:''}">
     <div class="card-header flex items-start justify-between gap-3" data-open="${id}">
       <div class="flex gap-3 flex-1 min-w-0">
@@ -852,6 +882,18 @@ function render(animate=false){
       send({type:'UPDATE_MODULE', id, data:{background: next}});
     };
   });
+  $$('[data-bool-toggle]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
+      const ck=btn.getAttribute('data-bool-toggle');
+      const parts=ck.split(':'); const id=parts[0]; const key=parts.slice(1).join(':');
+      const cur=config.modules[id]=config.modules[id]||{};
+      const next=!cur[key];
+      cur[key]=next;
+      btn.classList.toggle('active', next);
+      const patch={}; patch[key]=next; send({type:'UPDATE_MODULE',id,data:patch});
+    };
+  });
   $$('[data-reveal-toggle]').forEach(btn=>{
     btn.onclick=(e)=>{
       e.stopPropagation();
@@ -1025,6 +1067,11 @@ function patchFromSync(newData){
       const target=t.getAttribute('data-reveals');
       const w=card.querySelector(`[data-reveal-wrap="${id}:${target}"]`);
       if(w) w.classList.toggle('open', !!data[k]);
+    });
+    card.querySelectorAll('[data-bool-toggle]').forEach(t=>{
+      const parts=t.getAttribute('data-bool-toggle').split(':');
+      if(parts[0]!==id) return;
+      t.classList.toggle('active', !!data[parts.slice(1).join(':')]);
     });
   });
   const existingIds=new Set([...document.querySelectorAll('.card[data-id]')].map(c=>c.getAttribute('data-id')));

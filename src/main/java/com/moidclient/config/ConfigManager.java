@@ -86,6 +86,9 @@ public class ConfigManager {
         public boolean hitboxOther = false;
         public String hitboxOtherColor = "#9CA3AF";
         public boolean hitboxEyeLine = true;
+        public double hitboxEyeLength = 2.0; // 1-5
+        public double hitboxPadding = 0.0; // 0-0.5
+        public String hitboxRenderRate = "Every frame"; // Every frame / Every 2nd frame / Every 3rd frame
         public double hitboxWidth = 2.0; // 1-5
         public double hitboxOpacity = 0.9; // 0.1-1
         public double hitboxRange = 64.0; // 16-128 blocks
@@ -263,6 +266,14 @@ public class ConfigManager {
                 c.hitboxOpacity = Math.max(0.1, Math.min(1.0, c.hitboxOpacity));
                 if (c.hitboxRange == 0) c.hitboxRange = 64.0;
                 c.hitboxRange = Math.max(16.0, Math.min(128.0, c.hitboxRange));
+                if (c.hitboxEyeLength == 0) c.hitboxEyeLength = 2.0;
+                c.hitboxEyeLength = Math.max(1.0, Math.min(5.0, c.hitboxEyeLength));
+                c.hitboxPadding = Math.max(0.0, Math.min(0.5, c.hitboxPadding));
+                if (c.hitboxRenderRate == null || (!c.hitboxRenderRate.equals("Every frame")
+                        && !c.hitboxRenderRate.equals("Every 2nd frame")
+                        && !c.hitboxRenderRate.equals("Every 3rd frame"))) {
+                    c.hitboxRenderRate = "Every frame";
+                }
             }
         }
         ModuleConfig ping = modules.get("ping");
@@ -431,6 +442,12 @@ public class ConfigManager {
         if (data.has("hitboxPassives")) cfg.hitboxPassives = data.get("hitboxPassives").getAsBoolean();
         if (data.has("hitboxOther")) cfg.hitboxOther = data.get("hitboxOther").getAsBoolean();
         if (data.has("hitboxEyeLine")) cfg.hitboxEyeLine = data.get("hitboxEyeLine").getAsBoolean();
+        if (data.has("hitboxEyeLength")) cfg.hitboxEyeLength = data.get("hitboxEyeLength").getAsDouble();
+        if (data.has("hitboxPadding")) cfg.hitboxPadding = data.get("hitboxPadding").getAsDouble();
+        if (data.has("hitboxRenderRate") && !data.get("hitboxRenderRate").isJsonNull()) {
+            String r = data.get("hitboxRenderRate").getAsString();
+            if (r.equals("Every frame") || r.equals("Every 2nd frame") || r.equals("Every 3rd frame")) cfg.hitboxRenderRate = r;
+        }
         if (data.has("hitboxWidth")) cfg.hitboxWidth = data.get("hitboxWidth").getAsDouble();
         if (data.has("hitboxOpacity")) cfg.hitboxOpacity = data.get("hitboxOpacity").getAsDouble();
         if (data.has("hitboxRange")) cfg.hitboxRange = data.get("hitboxRange").getAsDouble();

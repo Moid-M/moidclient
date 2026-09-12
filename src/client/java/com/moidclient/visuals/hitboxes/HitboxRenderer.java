@@ -8,14 +8,13 @@ import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -35,20 +34,26 @@ public final class HitboxRenderer {
                 "Always-on entity hitboxes with per-group colors.",
                 "visuals", false,
             ModuleOption.list(
-                ModuleOption.bool("hitboxPlayers", "Show players"),
+                ModuleOption.bool("hitboxPlayers", "Players"),
                 ModuleOption.color("hitboxPlayersColor", "Player color"),
-                ModuleOption.bool("hitboxHostiles", "Show hostiles"),
+                ModuleOption.bool("hitboxHostiles", "Hostiles"),
                 ModuleOption.color("hitboxHostilesColor", "Hostile color"),
-                ModuleOption.bool("hitboxPassives", "Show passives"),
+                ModuleOption.bool("hitboxPassives", "Passives"),
                 ModuleOption.color("hitboxPassivesColor", "Passive color"),
-                ModuleOption.bool("hitboxOther", "Show other (items, projectiles)"),
+                ModuleOption.bool("hitboxOther", "Other (items, projectiles)"),
                 ModuleOption.color("hitboxOtherColor", "Other color"),
                 ModuleOption.bool("hitboxEyeLine", "Eye direction lines"),
+                ModuleOption.slider("hitboxEyeLength", "Eye line length", 1, 5, 0.5),
+                ModuleOption.slider("hitboxPadding", "Box padding", 0, 0.5, 0.05),
                 ModuleOption.slider("hitboxWidth", "Thickness", 1, 5, 0.5),
                 ModuleOption.slider("hitboxOpacity", "Opacity", 0.1, 1.0, 0.01),
-                ModuleOption.slider("hitboxRange", "Range (blocks)", 16, 128, 4)
+                ModuleOption.slider("hitboxRange", "Range (blocks)", 16, 128, 4),
+                ModuleOption.select("hitboxRenderRate", "Render rate",
+                        java.util.List.of("Every frame", "Every 2nd frame", "Every 3rd frame"))
             ));
     }
+
+    private static int frameCounter = 0;
 
     public static void register(ConfigManager config) {
         LevelRenderEvents.BEFORE_GIZMOS.register(context -> {
@@ -56,40 +61,55 @@ public final class HitboxRenderer {
                 if (config == null) return;
                 ConfigManager.ModuleConfig mod = config.getModule("hitboxes");
                 if (mod == null || !mod.enabled) return;
-                Minecraft mc = Minecraft.getInstance();
-                if (mc == null || mc.level == null) return;
+
+                // configurable render rate (perf scaling) - positions come from
+                // extracted render states, so they stay smooth at any rate.
+                int skip = 1;
+                if ("Every 2nd frame".equals(mod.hitboxRenderRate)) skip = 2;
+                else if ("Every 3rd frame".equals(mod.hitboxRenderRate)) skip = 3;
+                if ((frameCounter++ % skip) != 0) return;
 
                 float alpha = (float) Math.max(0.1, Math.min(1.0, mod.hitboxOpacity <= 0 ? 0.9 : mod.hitboxOpacity));
                 if (alpha <= 0.01f) return;
                 float width = (float) Math.max(1.0, Math.min(5.0, mod.hitboxWidth <= 0 ? 2.0 : mod.hitboxWidth));
                 double range = Math.max(16.0, Math.min(128.0, mod.hitboxRange <= 0 ? 64.0 : mod.hitboxRange));
                 double rangeSq = range * range;
+                double padding = Math.max(0.0, Math.min(0.5, mod.hitboxPadding));
+                double eyeLen = Math.max(1.0, Math.min(5.0, mod.hitboxEyeLength <= 0 ? 2.0 : mod.hitboxEyeLength));
 
                 Vec3 cam = context.levelState().cameraRenderState.pos;
-                Entity viewEntity = mc.getCameraEntity();
 
-                for (Entity entity : mc.level.entitiesForRendering()) {
+                for (EntityRenderState state : context.levelState().entityRenderStates) {
                     try {
-                        if (entity == null || entity.isRemoved()) continue;
-                        if (entity == viewEntity) continue;
-                        if (entity.distanceToSqr(cam.x, cam.y, cam.z) > rangeSq) continue;
-                        if (entity instanceof LivingEntity living && !living.isAlive()) continue;
+                        if (state == null) continue;
+                        if (state.distanceToCameraSq > rangeSq) continue;
+                        if (state instanceof LivingEntityRenderState living && living.deathTime > 0) continue;
 
-                        String hex = groupColor(entity, mod);
+                        String hex = groupColor(state, mod);
                         if (hex == null) continue;
                         float[] rgb = parse(hex);
                         if (rgb == null) continue;
 
-                        AABB box = entity.getBoundingBox();
+                        // skip our own player box when the camera sits inside it
+                        if (isPlayer(state) && state.distanceToCameraSq < 4.0) continue;
+
+                        double w = state.boundingBoxWidth + padding * 2;
+                        double h = state.boundingBoxHeight + padding * 2;
+                        AABB box = new AABB(
+                                state.x - w / 2, state.y - padding, state.z - w / 2,
+                                state.x + w / 2, state.y - padding + h, state.z + w / 2);
                         drawBox(context, box, cam, rgb[0], rgb[1], rgb[2], alpha, width);
 
-                        if (mod.hitboxEyeLine && entity instanceof LivingEntity living) {
-                            Vec3 eye = living.getEyePosition();
-                            Vec3 look = living.getLookAngle();
-                            double len = 2.0;
+                        if (mod.hitboxEyeLine && state instanceof LivingEntityRenderState living) {
+                            double eyeY = state.y + state.eyeHeight;
+                            double yR = Math.toRadians(living.yRot);
+                            double xR = Math.toRadians(living.xRot);
+                            double lx = -Math.sin(yR) * Math.cos(xR);
+                            double ly = -Math.sin(xR);
+                            double lz = Math.cos(yR) * Math.cos(xR);
                             drawSegment(context,
-                                    eye.x, eye.y, eye.z,
-                                    eye.x + look.x * len, eye.y + look.y * len, eye.z + look.z * len,
+                                    state.x, eyeY, state.z,
+                                    state.x + lx * eyeLen, eyeY + ly * eyeLen, state.z + lz * eyeLen,
                                     cam, rgb[0], rgb[1], rgb[2], alpha, width);
                         }
                     } catch (Exception ignored) {}
@@ -98,14 +118,25 @@ public final class HitboxRenderer {
         });
     }
 
-    private static String groupColor(Entity entity, ConfigManager.ModuleConfig mod) {
-        if (entity instanceof Player) {
-            return mod.hitboxPlayers ? mod.hitboxPlayersColor : null;
+    private static boolean isPlayer(EntityRenderState state) {
+        try {
+            EntityType<?> t = state.entityType;
+            if (t == null) return false;
+            return BuiltInRegistries.ENTITY_TYPE.getKey(t).toString().equals("minecraft:player");
+        } catch (Exception e) {
+            return false;
         }
-        if (entity instanceof Enemy) {
-            return mod.hitboxHostiles ? mod.hitboxHostilesColor : null;
-        }
-        if (entity instanceof Animal) {
+    }
+
+    private static String groupColor(EntityRenderState state, ConfigManager.ModuleConfig mod) {
+        if (isPlayer(state)) return mod.hitboxPlayers ? mod.hitboxPlayersColor : null;
+        EntityType<?> t = state.entityType;
+        if (t == null) return mod.hitboxOther ? mod.hitboxOtherColor : null;
+        MobCategory c = t.getCategory();
+        if (c == MobCategory.MONSTER) return mod.hitboxHostiles ? mod.hitboxHostilesColor : null;
+        if (c == MobCategory.CREATURE || c == MobCategory.AMBIENT
+                || c == MobCategory.WATER_AMBIENT || c == MobCategory.WATER_CREATURE
+                || c == MobCategory.UNDERGROUND_WATER_CREATURE || c == MobCategory.AXOLOTLS) {
             return mod.hitboxPassives ? mod.hitboxPassivesColor : null;
         }
         return mod.hitboxOther ? mod.hitboxOtherColor : null;
