@@ -23,6 +23,7 @@ public final class CoordinatesHud {
         return new ModuleDef("coords", "Coordinates", "Your XYZ block position.", "hud", true, "pin", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "XYZ: {x} / {y} / {z}"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
                 ModuleOption.opacity()

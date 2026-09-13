@@ -28,6 +28,7 @@ public final class ClockHud {
         return new ModuleDef("clock", "Clock", "Real time and current world day.", "hud", true, "clock", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "{time} | Day {day}"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
                 ModuleOption.opacity()

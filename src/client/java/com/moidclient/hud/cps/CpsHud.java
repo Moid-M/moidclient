@@ -34,6 +34,7 @@ public final class CpsHud {
         return new ModuleDef("cpsCounter", "CPS Counter", "Clicks per second - left | right with burst fire.", "hud", true, "mouse", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "CPS: {left} | {right}"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.select("cpsMode", "Buttons shown", java.util.List.of("both", "left", "right")),
                 ModuleOption.bool("cpsDynamicColor", "Dynamic color (burst green)"),

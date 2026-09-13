@@ -23,6 +23,7 @@ public final class BiomeHud {
         return new ModuleDef("biome", "Biome", "Current biome name.", "hud", true, "mountain", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "Biome: {biome}"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
                 ModuleOption.opacity()

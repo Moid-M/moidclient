@@ -23,6 +23,7 @@ public final class ServerHud {
         return new ModuleDef("server", "Server IP", "Current server address.", "hud", true, "server", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "Server: {server}"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
                 ModuleOption.opacity()

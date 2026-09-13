@@ -76,6 +76,7 @@ public final class KeystrokesHud {
                 ModuleOption.slider("keystrokesGap", "Key gap", 0, 10, 1),
                 ModuleOption.bool("keystrokesOutline", "Key outlines"),
                 ModuleOption.nullableColor("keystrokesPressedColor", "Pressed color", "empty = accent"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
                 ModuleOption.opacity()

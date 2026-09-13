@@ -23,6 +23,7 @@ public final class PingHud {
         return new ModuleDef("ping", "Ping Display", "Server latency in ms.", "hud", true, "signal", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "Ping: {ping} ms"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = auto by ping"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
                 ModuleOption.opacity()

@@ -26,6 +26,7 @@ public final class FpsHud {
         return new ModuleDef("fpsCounter", "FPS Counter", "Shows current frames per second.", "hud", true, "activity", true,
             ModuleOption.list(
                 ModuleOption.text("format", "Format", "FPS: {fps}"),
+                ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.select("fpsMode", "Update speed", java.util.List.of("stable", "fast")),
                 ModuleOption.bool("fpsDynamicColor", "Dynamic color (red-green)"),
