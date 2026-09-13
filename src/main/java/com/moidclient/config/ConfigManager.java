@@ -49,7 +49,7 @@ public class ConfigManager {
         public boolean background = false;
         public String backgroundColor = "#1A1B20";
         public String textColor = null; // null = auto (ping color)
-        public String format = "Ping: {ping} ms"; // placeholder {ping}
+        public String format = null; // null = per-module default (see fillMissingDefaults)
         public boolean shadow = true;
         // fps specific
         public String fpsMode = "stable"; // "fast" (per-frame) or "stable" (once/sec)
@@ -246,11 +246,19 @@ public class ConfigManager {
             if (e.getKey().equals("cpsCounter") && c.format != null && c.format.contains("{ping}")) {
                 c.format = "CPS: {left} | {right}";
             }
+            // heal configs that saved the old shared default on non-ping modules
+            if (!e.getKey().equals("ping") && "Ping: {ping} ms".equals(c.format)) c.format = null;
             if (c.format == null) {
-                if (e.getKey().equals("ping")) c.format = "Ping: {ping} ms";
-                else if (e.getKey().equals("fpsCounter")) c.format = "FPS: {fps}";
-                else if (e.getKey().equals("cpsCounter")) c.format = "CPS: {left} | {right}";
-                else c.format = "{value}";
+                switch (e.getKey()) {
+                    case "ping" -> c.format = "Ping: {ping} ms";
+                    case "fpsCounter" -> c.format = "FPS: {fps}";
+                    case "cpsCounter" -> c.format = "CPS: {left} | {right}";
+                    case "coords" -> c.format = "XYZ: {x} / {y} / {z}";
+                    case "server" -> c.format = "Server: {server}";
+                    case "clock" -> c.format = "{time} | Day {day}";
+                    case "biome" -> c.format = "Biome: {biome}";
+                    default -> c.format = "{value}";
+                }
             }
             // fullbright gamma 1-15
             if (e.getKey().equals("fullbright")) {
