@@ -60,8 +60,6 @@ public final class HitboxRenderer {
 
     private static int frameCounter = 0;
     private static volatile long lastTickMs = 0;
-    private static final org.slf4j.Logger DIAG_LOG = org.slf4j.LoggerFactory.getLogger("MoidClient");
-    private static int diagCounter = 0;
 
     public static void register(ConfigManager config) {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -94,17 +92,10 @@ public final class HitboxRenderer {
                 Entity viewEntity = mc.getCameraEntity();
                 float partial = tickPartial();
 
-                int n = 0;
-                String sample = "none";
                 for (Entity entity : mc.level.entitiesForRendering()) {
                     try {
                         if (entity == null || entity.isRemoved()) continue;
                         if (entity == viewEntity) continue;
-                        n++;
-                        if (n == 1) {
-                            sample = entity.getType().toString()
-                                    + " xyz=" + entity.getX() + "," + entity.getY() + "," + entity.getZ();
-                        }
                         double ix = Mth.lerp(partial, entity.xo, entity.getX());
                         double iy = Mth.lerp(partial, entity.yo, entity.getY());
                         double iz = Mth.lerp(partial, entity.zo, entity.getZ());
@@ -137,9 +128,6 @@ public final class HitboxRenderer {
                                     cam, rgb[0], rgb[1], rgb[2], alpha, width);
                         }
                     } catch (Exception ignored) {}
-                }
-                if ((diagCounter++ % 300) == 0) {
-                    DIAG_LOG.info("[MoidClient][HitboxDiag] live={} sample=[{}]", n, sample);
                 }
             } catch (Exception ignored) {}
         });
