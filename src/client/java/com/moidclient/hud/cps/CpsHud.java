@@ -3,6 +3,7 @@ package com.moidclient.hud.cps;
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
 import com.moidclient.hud.HudManager;
+import com.moidclient.module.ModulePreview;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
