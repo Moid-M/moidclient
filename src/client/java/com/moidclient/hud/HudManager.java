@@ -35,4 +35,16 @@ public final class HudManager {
 
     public static int getCurrentPing() { return PingHud.getCurrentPing(); }
     public static int getCurrentFps() { return FpsHud.getCurrentFps(); }
+
+    /** In-game text size in MC pixels, matching what renderers draw. */
+    public static int[] measureText(String text, boolean background) {
+        try {
+            var font = net.minecraft.client.Minecraft.getInstance().font;
+            int pad = background ? 6 : 0;
+            return new int[]{font.width(text) + pad, 9 + pad};
+        } catch (Exception e) {
+            int w = text != null ? text.length() * 6 : 60;
+            return new int[]{w, 9};
+        }
+    }
 }

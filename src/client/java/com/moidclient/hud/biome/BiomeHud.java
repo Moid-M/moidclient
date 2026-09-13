@@ -2,6 +2,7 @@ package com.moidclient.hud.biome;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.hud.HudManager;
 import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
@@ -59,7 +60,9 @@ public final class BiomeHud {
         if (config == null) return null;
         ConfigManager.ModuleConfig mod = config.getModule("biome");
         if (mod == null) return null;
-        return ModulePreview.text("biome", formatText(mod, currentBiome()));
+        String text = formatText(mod, currentBiome());
+        int[] size = HudManager.measureText(text, mod.background);
+        return new ModulePreview("biome", text, "text", size[0], size[1], false);
     }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {

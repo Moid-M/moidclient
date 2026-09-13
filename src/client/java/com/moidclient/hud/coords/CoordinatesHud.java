@@ -2,6 +2,7 @@ package com.moidclient.hud.coords;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.hud.HudManager;
 import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
@@ -22,7 +23,7 @@ public final class CoordinatesHud {
     public static ModuleDef definition() {
         return new ModuleDef("coords", "Coordinates", "Your XYZ block position.", "hud", true, "pin", true,
             ModuleOption.list(
-                ModuleOption.text("format", "Format", "XYZ: {x} / {y} / {z}"),
+                ModuleOption.text("format", "Format", "XYZ: {x} | {y} | {z}"),
                 ModuleOption.nullableColor("textColor", "Text color", "empty = white"),
                 ModuleOption.bool("shadow", "Text shadow"),
                 ModuleOption.scale(),
@@ -31,7 +32,7 @@ public final class CoordinatesHud {
     }
 
     public static String formatText(ConfigManager.ModuleConfig mod, int x, int y, int z) {
-        String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "XYZ: {x} / {y} / {z}";
+        String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "XYZ: {x} | {y} | {z}";
         return fmt.replace("{x}", String.valueOf(x))
                 .replace("{y}", String.valueOf(y))
                 .replace("{z}", String.valueOf(z))
@@ -44,12 +45,17 @@ public final class CoordinatesHud {
         if (mod == null) return null;
         try {
             var player = Minecraft.getInstance().player;
-            if (player == null) return ModulePreview.text("coords", formatText(mod, 0, 64, 0));
+            if (player == null) return sizedPreview(mod, formatText(mod, 0, 64, 0));
             var pos = player.blockPosition();
-            return ModulePreview.text("coords", formatText(mod, pos.getX(), pos.getY(), pos.getZ()));
+            return sizedPreview(mod, formatText(mod, pos.getX(), pos.getY(), pos.getZ()));
         } catch (Exception e) {
             return ModulePreview.text("coords", formatText(mod, 0, 64, 0));
         }
+    }
+
+    private static ModulePreview sizedPreview(ConfigManager.ModuleConfig mod, String text) {
+        int[] size = HudManager.measureText(text, mod.background);
+        return new ModulePreview("coords", text, "text", size[0], size[1], false);
     }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {

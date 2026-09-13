@@ -2,6 +2,7 @@ package com.moidclient.hud.clock;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.hud.HudManager;
 import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
@@ -64,7 +65,9 @@ public final class ClockHud {
         if (config == null) return null;
         ConfigManager.ModuleConfig mod = config.getModule("clock");
         if (mod == null) return null;
-        return ModulePreview.text("clock", formatText(mod, currentTime(), currentDay()));
+        String text = formatText(mod, currentTime(), currentDay());
+        int[] size = HudManager.measureText(text, mod.background);
+        return new ModulePreview("clock", text, "text", size[0], size[1], false);
     }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {

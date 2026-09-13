@@ -1,5 +1,5 @@
 ﻿// Moid Client - HUD Editor + inline pickers, center fix, drag fix, no X/Y in card
-const MOID_APP_VERSION='1.1.0-dev';
+const MOID_APP_VERSION='1.1.0-dev2';
 console.log('[MoidClient] app.js '+MOID_APP_VERSION);
 const PRESETS = [
   { name: 'Electric Violet', hex: '#8B5CF6' },
@@ -214,6 +214,21 @@ function handleLiveStats(data){
     });
   }
 }
+function samplePreview(id){
+  // representative values when the game hasn't sent live previews (yet) -
+  // pure samples, no Java involved.
+  switch(id){
+    case 'ping': return {text:'Ping: 42 ms', kind:'text'};
+    case 'fpsCounter': return {text:'FPS: 144', kind:'text'};
+    case 'cpsCounter': return {text:'CPS: 8 | 12', kind:'text'};
+    case 'keystrokes': return {text:'WASD', kind:'keystrokes', w:58, h:90, highlight:false};
+    case 'coords': return {text:'XYZ: 100 | 64 | -200', kind:'text'};
+    case 'server': return {text:'Server: play.example.net', kind:'text'};
+    case 'clock': return {text:'09:41 | Day 3', kind:'text'};
+    case 'biome': return {text:'Biome: Plains', kind:'text'};
+    default: return null;
+  }
+}
 function syncEditorItems(){
   try{
   const outer=document.querySelector('#hudPreviewOuter');
@@ -233,25 +248,29 @@ function syncEditorItems(){
   idsToShow.forEach(id=>{
     const mod=config.modules[id]||{x:10,y:10,scale:1,opacity:1, background:false, backgroundColor:'#1A1B20', textColor:null};
     const scale=mod.scale||1;
-    const pv=(window.modulePreviews||{})[id]||null;
+    const pv=(window.modulePreviews||{})[id]||samplePreview(id);
     const txt=pv&&pv.text!=null ? pv.text : (MODULES_META[id]?.name||id);
-    const isKeysBox = !!(pv && pv.kind==='keystrokes');
+    // fixedDims: server-measured MC pixel size, scaled into the browser -
+    // matches the in-game box (transform scale applied below, same origin).
+    const fixedDims = !!(pv && pv.w>0 && pv.h>0);
     const el=document.createElement('div');
     el.className='hud-preview-item absolute select-none cursor-grab active:cursor-grabbing flex items-center justify-center text-xs font-medium whitespace-nowrap border';
     el.dataset.id=id;
     const bgEnabled = !!mod.background;
-    if(isKeysBox){
-      el.style.width = ((pv.w>0?pv.w:60)) + 'px';
-      el.style.height = ((pv.h>0?pv.h:18)) + 'px';
+    if(fixedDims){
+      el.style.width = pv.w + 'px';
+      el.style.height = pv.h + 'px';
       el.style.padding = '2px';
       el.style.display = 'flex';
-      el.style.flexDirection = 'column';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
-      el.style.gap = '2px';
-      el.style.fontSize = '9px';
-      el.style.lineHeight = '1';
-      el.style.whiteSpace = 'pre';
+      if(pv.kind==='keystrokes'){
+        el.style.flexDirection = 'column';
+        el.style.gap = '2px';
+        el.style.fontSize = '9px';
+        el.style.lineHeight = '1';
+        el.style.whiteSpace = 'pre';
+      }
       if(bgEnabled){
         const bgCol = mod.backgroundColor || '#1A1B20';
         const bgOp = mod.backgroundOpacity ?? 0.85;
@@ -281,7 +300,7 @@ function syncEditorItems(){
     el.style.transform=`scale(${scale})`; el.style.transformOrigin='top left';
     el.textContent=txt;
     el.style.opacity = mod.opacity ?? 1;
-    if(isKeysBox && mod.keystrokesOutline===false){
+    if(pv.kind==='keystrokes' && mod.keystrokesOutline===false){
       el.style.borderColor='transparent';
     }
     let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - 12));

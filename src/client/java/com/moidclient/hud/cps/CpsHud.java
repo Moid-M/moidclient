@@ -2,6 +2,7 @@ package com.moidclient.hud.cps;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.hud.HudManager;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ColorUtil;
@@ -214,7 +215,9 @@ public final class CpsHud {
         int right = stats != null ? stats.cpsRight : 0;
         int peakL = stats != null ? stats.peakLeft : 0;
         int peakR = stats != null ? stats.peakRight : 0;
-        return com.moidclient.module.ModulePreview.text("cpsCounter", formatText(mod, left, right, peakL, peakR));
+        String text = formatText(mod, left, right, peakL, peakR);
+        int[] size = HudManager.measureText(text, mod.background);
+        return new ModulePreview("cpsCounter", text, "text", size[0], size[1], false);
     }
 
     private static int colorForCps(int cps, double opacity) {

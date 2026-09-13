@@ -248,12 +248,14 @@ public class ConfigManager {
             }
             // heal configs that saved the old shared default on non-ping modules
             if (!e.getKey().equals("ping") && "Ping: {ping} ms".equals(c.format)) c.format = null;
+            // heal previous coords separator default
+            if (e.getKey().equals("coords") && "XYZ: {x} / {y} / {z}".equals(c.format)) c.format = null;
             if (c.format == null) {
                 switch (e.getKey()) {
                     case "ping" -> c.format = "Ping: {ping} ms";
                     case "fpsCounter" -> c.format = "FPS: {fps}";
                     case "cpsCounter" -> c.format = "CPS: {left} | {right}";
-                    case "coords" -> c.format = "XYZ: {x} / {y} / {z}";
+                    case "coords" -> c.format = "XYZ: {x} | {y} | {z}";
                     case "server" -> c.format = "Server: {server}";
                     case "clock" -> c.format = "{time} | Day {day}";
                     case "biome" -> c.format = "Biome: {biome}";

@@ -2,6 +2,7 @@ package com.moidclient.hud.server;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.hud.HudCompat;
+import com.moidclient.hud.HudManager;
 import com.moidclient.module.LiveStats;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
@@ -49,7 +50,9 @@ public final class ServerHud {
         if (config == null) return null;
         ConfigManager.ModuleConfig mod = config.getModule("server");
         if (mod == null) return null;
-        return ModulePreview.text("server", formatText(mod, currentAddress()));
+        String text = formatText(mod, currentAddress());
+        int[] size = HudManager.measureText(text, mod.background);
+        return new ModulePreview("server", text, "text", size[0], size[1], false);
     }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, ConfigManager config) {
