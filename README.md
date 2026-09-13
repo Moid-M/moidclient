@@ -45,6 +45,10 @@ drift into the prose sections above.
 | Ping HUD | HUD | Displays current server ping | ✅ |
 | CPS Counter | HUD | Displays clicks per second | ✅ |
 | Keystrokes | HUD | Displays currently pressed movement/action keys | ✅ |
+| Coordinates | HUD | Shows your XYZ block position | ✅ |
+| Server IP | HUD | Shows the current server address | ✅ |
+| Clock | HUD | Shows real time and current world day | ✅ |
+| Biome | HUD | Shows the current biome name | ✅ |
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
 | Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
 | Perspective Skip | Utility | F5 skips a third-person view — back or front, selectable | ✅ |

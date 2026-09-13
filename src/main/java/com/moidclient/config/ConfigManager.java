@@ -204,6 +204,10 @@ public class ConfigManager {
         registerDefault("fpsCounter", new ModuleConfig(true, 10, 10), overwrite);
         registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
         registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
+        registerDefault("coords", new ModuleConfig(false, 10, 110), overwrite);
+        registerDefault("server", new ModuleConfig(false, 10, 130), overwrite);
+        registerDefault("clock", new ModuleConfig(false, 10, 150), overwrite);
+        registerDefault("biome", new ModuleConfig(false, 10, 170), overwrite);
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);

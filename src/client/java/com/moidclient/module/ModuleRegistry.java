@@ -3,10 +3,14 @@ package com.moidclient.module;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.moidclient.config.ConfigManager;
+import com.moidclient.hud.biome.BiomeHud;
+import com.moidclient.hud.clock.ClockHud;
+import com.moidclient.hud.coords.CoordinatesHud;
 import com.moidclient.hud.cps.CpsHud;
 import com.moidclient.hud.fps.FpsHud;
 import com.moidclient.hud.keystrokes.KeystrokesHud;
 import com.moidclient.hud.ping.PingHud;
+import com.moidclient.hud.server.ServerHud;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
 import com.moidclient.visuals.hitboxes.HitboxRenderer;
@@ -28,6 +32,10 @@ public final class ModuleRegistry {
             FpsHud.definition(),
             CpsHud.definition(),
             KeystrokesHud.definition(),
+            CoordinatesHud.definition(),
+            ServerHud.definition(),
+            ClockHud.definition(),
+            BiomeHud.definition(),
             FullbrightManager.definition(),
             BlockOutlineRenderer.definition(),
             PerspectiveSkipManager.definition(),
@@ -48,6 +56,10 @@ public final class ModuleRegistry {
         putPreview(out, FpsHud.preview(config, stats));
         putPreview(out, CpsHud.preview(config, stats));
         putPreview(out, KeystrokesHud.preview(config, stats));
+        putPreview(out, CoordinatesHud.preview(config, stats));
+        putPreview(out, ServerHud.preview(config, stats));
+        putPreview(out, ClockHud.preview(config, stats));
+        putPreview(out, BiomeHud.preview(config, stats));
         return out;
     }
 
