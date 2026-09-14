@@ -201,7 +201,7 @@ public class ConfigManager {
      */
     private void ensureDefaults(boolean overwrite) {
         registerDefault("ping", new ModuleConfig(false, 10, 50), overwrite);
-        registerDefault("fpsCounter", new ModuleConfig(true, 10, 10), overwrite);
+        registerDefault("fpsCounter", new ModuleConfig(false, 10, 10), overwrite);
         registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
         registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
         registerDefault("coords", new ModuleConfig(false, 10, 110), overwrite);

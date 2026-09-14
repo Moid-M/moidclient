@@ -16,16 +16,16 @@ A lightweight, open-source Fabric client with a clickgui that runs entirely in y
 
 | Minecraft Version | Fabric Loader | Java | Status |
 |---|---|---|---|
-| 26.1 – 26.1.2 | 0.19.3 | 25 | ✅ Supported |
-| 26.2 | 0.19.5 | 25 | ✅ Supported |
+| 26.1 – 26.1.2 | >=0.18.0 (tested 0.19.3) | 25 | ✅ Supported |
+| 26.2 | >=0.18.0 (tested 0.19.5) | 25 | ✅ Supported |
 | 26.3 | — | — | ❌ Not supported — no stable release exists yet, only snapshots and release candidates. Support lands once Mojang ships it. |
 
-Requires **Java 25** (Temurin 25+). One jar per Minecraft version — pick the one matching your game (`Moid-Client-v1.1.0+26.1.jar` or `Moid-Client-v1.1.0+26.2.jar`) from [Releases](../../releases).
+Requires **Java 25** (Temurin 25+). One universal jar works on all supported Minecraft versions — download `Moid-Client-v1.1.0.jar` from [Releases](../../releases).
 
 ## Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) for your Minecraft version (26.1 or 26.2).
-2. Download the matching jar from [Releases](../../releases) (`Moid-Client-v1.1.0+26.1.jar` or `Moid-Client-v1.1.0+26.2.jar`).
+1. Install [Fabric Loader](https://fabricmc.net/use/) 0.18.0 or newer for your Minecraft version (26.1 or 26.2).
+2. Download the universal jar from [Releases](../../releases) (`Moid-Client-v1.1.0.jar` — works on 26.1 and 26.2).
 3. Drop it into your `.minecraft/mods` folder (with `fabric-api` if not already present).
 4. Launch Minecraft. Moid starts a local webserver — press `K` (or check the game log) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
 
@@ -89,13 +89,13 @@ Moid's performance goals are scoped to:
 ```bash
 git clone https://github.com/moid-m/moidclient.git
 cd moidclient
-./gradlew build # requires Java 25, builds for MC 26.1 (see gradle.properties)
+./gradlew build # requires Java 25, builds the universal jar (compiled against the 26.1 baseline in gradle.properties, runs on 26.1–26.2)
 ```
 
-Per-version jars for every supported Minecraft version:
+Universal release jar:
 
 ```powershell
-.\build-all.bat # builds dist/Moid-Client-v1.1.0+26.1.jar, +26.2.jar, ...
+.\build-all.bat # builds dist/Moid-Client-v1.1.0.jar (works on 26.1 and 26.2)
 ```
 
 ## Contributing

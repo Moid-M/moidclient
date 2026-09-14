@@ -38,10 +38,10 @@
   <aside class="w-[240px] hidden md:flex flex-col p-3 gap-1 border-r" style="border-color:var(--border);background:var(--card)">
     <div class="text-[11px] tracking-widest uppercase px-2 py-2" style="color:var(--text-muted)">Navigation</div>
     <div id="sidebar">
-      <div data-tab="all" class="sidebar-item">
+      <div data-tab="all" class="sidebar-item active">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/></svg> All Modules
       </div>
-      <div data-tab="hud" class="sidebar-item active">
+      <div data-tab="hud" class="sidebar-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg> HUD Overlays
       </div>
       <div data-tab="editor" class="sidebar-item">
@@ -68,9 +68,9 @@
 
   <!-- Mobile tabs -->
   <div class="md:hidden flex gap-2 p-3 overflow-x-auto border-b w-full" style="border-color:var(--border)">
-    <button data-tab="all" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">All</button>
+    <button data-tab="all" class="tab-m active px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%, transparent)">All</button>
     <button data-tab="editor" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Editor</button>
-    <button data-tab="hud" class="tab-m active px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%, transparent)">HUD</button>
+    <button data-tab="hud" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">HUD</button>
     <button data-tab="visuals" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Visuals</button>
     <button data-tab="utility" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Utils</button>
     <button data-tab="keybinds" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Keybinds</button>
@@ -80,7 +80,7 @@
   <!-- Main -->
   <main class="flex-1 overflow-auto p-4 md:p-6">
     <!-- All tab -->
-    <section id="tab-all" class="tab-panel hidden space-y-4">
+    <section id="tab-all" class="tab-panel space-y-4">
       <div class="flex items-center gap-3">
         <div class="relative flex-1">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/></svg>
@@ -131,7 +131,7 @@
       </div>
     </section>
     <!-- HUD tab -->
-    <section id="tab-hud" class="tab-panel space-y-4">
+    <section id="tab-hud" class="tab-panel hidden space-y-4">
       <div class="flex items-end justify-between">
         <div>
           <h2 class="text-[18px] font-semibold">HUD Overlays</h2>
