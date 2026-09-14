@@ -58,6 +58,8 @@ drift into the prose sections above.
 
 | Module | Category | Description |
 |---|---|---|
+| Zoom | Utility | Hold-key FOV zoom with smoothing |
+| FreeLook | Utility | Hold-key 360° camera, movement stays put |
 | Crosshair Customization | HUD | Custom crosshair styles, colors, sizes |
 
 ## How Moid Compares
@@ -89,13 +91,7 @@ Moid's performance goals are scoped to:
 ```bash
 git clone https://github.com/moid-m/moidclient.git
 cd moidclient
-./gradlew build # requires Java 25, builds the universal jar (compiled against the 26.1 baseline in gradle.properties, runs on 26.1–26.2)
-```
-
-Universal release jar:
-
-```powershell
-.\build-all.bat # builds dist/Moid-Client-v1.1.0.jar (works on 26.1 and 26.2)
+./gradlew build # requires Java 25 — universal jar lands in build/libs/Moid-Client-v1.1.0.jar (runs on 26.1–26.2)
 ```
 
 ## Contributing
