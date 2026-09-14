@@ -237,8 +237,7 @@ function syncEditorItems(){
   const enabledIds=MODULE_ORDER.filter(id=>{
     const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.editor;
   });
-  const hudKeys=MODULE_ORDER.filter(k=>MODULES_META[k] && MODULES_META[k].editor);
-  const idsToShow = enabledIds.length ? enabledIds : hudKeys.slice(0,2);
+  const idsToShow = enabledIds;
   const outers=[outer, ...[...document.querySelectorAll('.hudPreviewOuter')].filter(o=>o!==outer)];
   for(const box of outers){
   box.querySelectorAll('.hud-preview-item').forEach(e=>e.remove());
@@ -310,6 +309,12 @@ function syncEditorItems(){
     if(editorSelectedId===id){ el.style.outline='2px solid var(--accent)'; el.style.outlineOffset='1px'; el.style.zIndex='2'; }
     box.appendChild(el);
   });
+  if(!idsToShow.length){
+    const hint=document.createElement('div');
+    hint.className='absolute inset-0 flex items-center justify-center pointer-events-none';
+    hint.innerHTML='<span class="text-[11px] px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--card);color:var(--text-muted)">No HUD modules enabled — toggle one to position it here</span>';
+    box.appendChild(hint);
+  }
   }
   const selLabel=document.querySelector('#editorSelectedLabel');
   if(selLabel) selLabel.textContent = editorSelectedId ? (MODULES_META[editorSelectedId]?.name || editorSelectedId) : (enabledIds[0] ? (MODULES_META[enabledIds[0]]?.name||enabledIds[0]) : '-');
