@@ -24,7 +24,7 @@ Finished modules also live in the README table; this file tracks everything else
 
 ## 🔨 In progress (this batch)
 
-- [x] **Zoom** (`zoom`, Utility) — hold/toggle, dashboard-rebindable key, level slider, smooth + speed, lower sensitivity. Tick-based, no mixins. Writes FOV past slider-range validation via direct field write.
+- [x] **Zoom** (`zoom`, Utility) — hold/toggle, dashboard-rebindable key, level slider, per-frame exponential smooth in/out (toggleable) + speed, lower sensitivity. Camera mixin overwrites computed FOV; user option untouched.
 - [x] **FreeLook** (`freelook`, Utility) — hold/toggle, dashboard-rebindable key, auto third-person-back on engage (restores after), sensitivity slider. The project's first mixin (camera detach + turn reroute).
 - [ ] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`isKeyDown(int)`, KEYBOARD enum, key-code translation). Range stays `<26.3` until this lands.
 

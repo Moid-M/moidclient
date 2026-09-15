@@ -99,7 +99,8 @@ public class ConfigManager {
         public int zoomKey = 67; // GLFW key code (67 = C)
         public double zoomLevel = 4.0; // FOV divisor while zoom key held (1.5-10)
         public boolean zoomSmooth = true;
-        public double zoomSmoothSpeed = 0.4; // lerp factor per tick (0.05-1)
+        public boolean zoomSmoothOut = true;
+        public double zoomSmoothSpeed = 0.4; // smoothing rate (0.05-1)
         public boolean zoomLowerSensitivity = true;
         // freelook specific
         public String freelookMode = "hold"; // hold or toggle
@@ -484,6 +485,7 @@ public class ConfigManager {
         }
         if (data.has("zoomLevel")) cfg.zoomLevel = data.get("zoomLevel").getAsDouble();
         if (data.has("zoomSmooth")) cfg.zoomSmooth = data.get("zoomSmooth").getAsBoolean();
+        if (data.has("zoomSmoothOut")) cfg.zoomSmoothOut = data.get("zoomSmoothOut").getAsBoolean();
         if (data.has("zoomSmoothSpeed")) cfg.zoomSmoothSpeed = data.get("zoomSmoothSpeed").getAsDouble();
         if (data.has("zoomLowerSensitivity")) cfg.zoomLowerSensitivity = data.get("zoomLowerSensitivity").getAsBoolean();
         if (data.has("zoomKey")) cfg.zoomKey = data.get("zoomKey").getAsInt();

@@ -13,9 +13,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 /**
- * Zoom - hold-key FOV zoom with optional smoothing and sensitivity scaling.
- * No mixins: adjusts the FOV (and optionally mouse sensitivity) option each
- * tick while the zoom key is held, restoring the user's values on release.
+ * Zoom - hold/toggle FOV zoom with per-frame exponential smoothing and
+ * sensitivity scaling. The Camera mixin overwrites the computed FOV every
+ * frame, so zoom-in eases in, release eases back out, and the user's option
+ * is never touched. Sensitivity still goes through the option (in-range).
  * All option access is reflection-based so one build runs on every
  * supported version without mapping breakage.
  * Category: Utility
@@ -33,19 +34,66 @@ public final class ZoomManager {
                     ModuleOption.select("zoomMode", "Activation", java.util.List.of("hold", "toggle")),
                     ModuleOption.keybind("zoomKey", "Key", GLFW.GLFW_KEY_C),
                     ModuleOption.slider("zoomLevel", "Zoom level", 1.5, 10.0, 0.5),
-                    ModuleOption.bool("zoomSmooth", "Smooth zoom"),
+                    ModuleOption.bool("zoomSmooth", "Smooth zoom-in"),
+                    ModuleOption.bool("zoomSmoothOut", "Smooth zoom-out"),
                     ModuleOption.slider("zoomSmoothSpeed", "Smooth speed", 0.05, 1.0, 0.05),
                     ModuleOption.bool("zoomLowerSensitivity", "Lower sensitivity while zoomed")
                 ));
     }
 
-    private static double originalFov = -1;
-    private static double originalSens = -1;
+    private static double baseFov = -1;
+    private static double targetFov = -1;
     private static double currentFov = -1;
-    private static boolean wasZooming = false;
+    private static double originalSens = -1;
+    private static boolean held = false;
+    private static boolean animOut = false;
+    private static boolean smoothIn = true;
+    private static boolean smoothOut = true;
+    private static double speed = 0.4;
     private static boolean toggled = false;
     private static boolean wasDown = false;
     private static boolean accessorWarned = false;
+
+    /**
+     * Advances and returns the FOV for this frame, called by the Camera mixin
+     * on every render frame. -1 means inactive (vanilla FOV applies untouched).
+     */
+    public static float frameFov(net.minecraft.client.DeltaTracker dt) {
+        float dtSec = 0.05f;
+        try {
+            if (dt != null) dtSec = Math.max(0f, dt.getRealtimeDeltaTicks() / 20f);
+        } catch (Exception ignored) {}
+        double factor = frameFactor(speed, dtSec);
+        if (held && targetFov > 0) {
+            if (!smoothIn) {
+                currentFov = targetFov;
+            } else if (currentFov < 0) {
+                currentFov = baseFov > 0 ? baseFov : targetFov;
+            } else {
+                currentFov += (targetFov - currentFov) * factor;
+                if (Math.abs(targetFov - currentFov) < 0.3) currentFov = targetFov;
+            }
+            animOut = false;
+            return (float) currentFov;
+        }
+        if (smoothOut && animOut && baseFov > 0 && currentFov > 0) {
+            currentFov += (baseFov - currentFov) * factor;
+            if (Math.abs(baseFov - currentFov) < 0.3) {
+                currentFov = baseFov;
+                animOut = false;
+                return -1f;
+            }
+            return (float) currentFov;
+        }
+        animOut = false;
+        return -1f;
+    }
+
+    /** Framerate-independent smoothing factor from the speed slider. */
+    private static double frameFactor(double speed, float dtSec) {
+        double k = Math.max(1.0, speed * 20.0);
+        return 1.0 - Math.exp(-k * Math.max(0.0, dtSec));
+    }
 
     public static void onTick(Minecraft mc, ConfigManager config) {
         try {
@@ -56,11 +104,24 @@ public final class ZoomManager {
             wasDown = down;
             if (mc == null || mc.options == null || mod == null || !mod.enabled || mc.player == null) {
                 toggled = false;
-                restore(mc);
+                snapInactive();
+                restoreSens(mc);
                 return;
             }
+            smoothIn = mod.zoomSmooth;
+            smoothOut = mod.zoomSmoothOut;
+            speed = mod.zoomSmoothSpeed <= 0 ? 0.4 : Math.max(0.05, Math.min(1.0, mod.zoomSmoothSpeed));
             boolean zooming = toggleMode ? toggled : down;
-            if (!zooming) { restore(mc); return; }
+            if (!zooming) {
+                // Release: clear the hold flag FIRST (otherwise the frame
+                // loop keeps rendering zoomed forever), then ease out or snap.
+                if (held) LOGGER.info("[MoidClient/Zoom] released");
+                held = false;
+                if (!smoothOut || currentFov < 0) snapInactive();
+                else animOut = true;
+                restoreSens(mc);
+                return;
+            }
 
             double level = mod.zoomLevel <= 0 ? 4.0 : Math.max(1.5, Math.min(10.0, mod.zoomLevel));
             OptionAccess fov = OptionAccess.find(mc.options, "fov", "getFov");
@@ -71,26 +132,19 @@ public final class ZoomManager {
                 }
                 return;
             }
-            if (originalFov < 0) {
-                originalFov = fov.getAsDouble();
-                currentFov = originalFov;
-                LOGGER.debug("[MoidClient/Zoom] engaged: baseFov={} level={}", originalFov, level);
-            }
-            double target = Math.max(1.0, originalFov / level);
-            if (mod.zoomSmooth) {
-                double speed = mod.zoomSmoothSpeed <= 0 ? 0.4 : Math.max(0.05, Math.min(1.0, mod.zoomSmoothSpeed));
-                currentFov += (target - currentFov) * speed;
-                if (Math.abs(target - currentFov) < 0.1) currentFov = target;
-            } else {
-                currentFov = target;
-            }
+            double base;
             try {
-                fov.setFromDouble(currentFov);
+                base = fov.getAsDouble();
             } catch (Exception e) {
-                LOGGER.warn("[MoidClient/Zoom] failed to apply FOV {}", currentFov, e);
                 return;
             }
-            wasZooming = true;
+            if (baseFov < 0) {
+                LOGGER.info("[MoidClient/Zoom] engaged: baseFov={} level={} key={}", base, level, mod.zoomKey);
+            }
+            baseFov = base;
+            targetFov = Math.max(1.0, base / level);
+            held = true;
+            animOut = false;
 
             if (mod.zoomLowerSensitivity) {
                 OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
@@ -102,28 +156,30 @@ public final class ZoomManager {
         } catch (Exception ignored) {}
     }
 
-    /** Restores the user's FOV/sensitivity after zooming. No-op unless we zoomed. */
-    private static void restore(Minecraft mc) {
-        if (!wasZooming && originalFov < 0 && originalSens < 0) return;
+    /** Hard reset: no animation, mixin goes inactive immediately. */
+    private static void snapInactive() {
+        held = false;
+        animOut = false;
+        baseFov = -1;
+        targetFov = -1;
+        currentFov = -1;
+    }
+
+    /** Restores the user's sensitivity (FOV option was never touched). */
+    private static void restoreSens(Minecraft mc) {
+        if (originalSens < 0) {
+            originalSens = -1;
+            return;
+        }
         try {
             if (mc != null && mc.options != null) {
-                if (originalFov >= 0) {
-                    OptionAccess fov = OptionAccess.find(mc.options, "fov", "getFov");
-                    if (fov != null) fov.setFromDouble(originalFov);
-                }
-                if (originalSens >= 0) {
-                    OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
-                    if (sens != null) sens.setFromDouble(originalSens);
-                }
+                OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
+                if (sens != null) sens.setFromDouble(originalSens);
             }
         } catch (Exception e) {
             LOGGER.debug("[MoidClient/Zoom] restore failed", e);
         }
-        LOGGER.debug("[MoidClient/Zoom] released, restored fov={}", originalFov);
-        originalFov = -1;
         originalSens = -1;
-        currentFov = -1;
-        wasZooming = false;
     }
 
     /** Raw GLFW hold-state for a dashboard-bound key code (0 = unbound). */
@@ -199,13 +255,22 @@ public final class ZoomManager {
         }
 
         private static Field field(Class<?> c, String name) throws Exception {
-            try {
-                return c.getField(name);
-            } catch (NoSuchFieldException e) {
-                Field f = c.getDeclaredField(name);
-                f.setAccessible(true);
-                return f;
+            // Walk superclasses: vanilla often returns anonymous OptionInstance
+            // subclasses whose private fields live on the parent (same pattern
+            // FullbrightManager already uses for gamma).
+            Class<?> cur = c;
+            while (cur != null) {
+                try {
+                    return cur.getField(name);
+                } catch (NoSuchFieldException ignored) {}
+                try {
+                    Field f = cur.getDeclaredField(name);
+                    f.setAccessible(true);
+                    return f;
+                } catch (NoSuchFieldException ignored) {}
+                cur = cur.getSuperclass();
             }
+            throw new NoSuchFieldException(name);
         }
 
         double getAsDouble() throws Exception {

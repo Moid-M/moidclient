@@ -110,6 +110,41 @@ public final class FreeLookManager {
         } catch (Exception ignored) {}
     }
 
+    private static float savedYaw = 0;
+    private static float savedPitch = 0;
+    private static boolean swapped = false;
+
+    /**
+     * Called at the head of Camera.update: lends the FreeLook angles to the
+     * player so vanilla positions/rotates the camera (and its culling
+     * frustum) around the player. Restored by {@link #swapOut()}.
+     */
+    public static void swapIn() {
+        if (!active || swapped) return;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.player == null) return;
+            savedYaw = mc.player.getYRot();
+            savedPitch = mc.player.getXRot();
+            mc.player.setYRot(yaw);
+            mc.player.setXRot(pitch);
+            swapped = true;
+        } catch (Exception ignored) {}
+    }
+
+    /** Called at the tail of Camera.update: gives the player its rotation back. */
+    public static void swapOut() {
+        if (!swapped) return;
+        swapped = false;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null && mc.player != null) {
+                mc.player.setYRot(savedYaw);
+                mc.player.setXRot(savedPitch);
+            }
+        } catch (Exception ignored) {}
+    }
+
     public static boolean isActive() {
         return active;
     }
