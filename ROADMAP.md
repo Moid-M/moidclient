@@ -19,11 +19,18 @@ Finished modules also live in the README table; this file tracks everything else
 | Block Outline | Visuals | `blockOutline` |
 | Perspective Skip | Utility | `perspectiveSkip` |
 | Custom Hitboxes | Visuals | `hitboxes` |
+| Zoom | Utility | `zoom` |
+| FreeLook | Utility | `freelook` |
 
 ## 🔨 In progress (this batch)
 
-- [ ] **Zoom** (`zoom`, Utility) — hold-key FOV zoom, smooth lerp, scroll-adjust, lower sensitivity while zoomed. Tick-based, no mixins.
-- [ ] **FreeLook** (`freelook`, Utility) — hold-key 360° camera, player keeps walking direction. Requires the project's first mixin (camera detach).
+- [x] **Zoom** (`zoom`, Utility) — hold/toggle, dashboard-rebindable key, level slider, smooth + speed, lower sensitivity. Tick-based, no mixins. Writes FOV past slider-range validation via direct field write.
+- [x] **FreeLook** (`freelook`, Utility) — hold/toggle, dashboard-rebindable key, auto third-person-back on engage (restores after), sensitivity slider. The project's first mixin (camera detach + turn reroute).
+- [ ] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`isKeyDown(int)`, KEYBOARD enum, key-code translation). Range stays `<26.3` until this lands.
+
+## 🧱 Infra
+
+- [x] **Stonecutter migration** — one shared `src/`, per-version nodes (`versions/26.1`, `versions/26.2`), per-version jars (`Moid-Client-v1.1.0+26.x.jar`). Build one: `./gradlew :26.1:build`. Build all: `./gradlew :26.1:build :26.2:build`. Reset to VCS version before committing: `./gradlew "Reset active project"`.
 
 ## ⏭ Next up (agreed core gaps)
 

@@ -94,6 +94,17 @@ public class ConfigManager {
         public double hitboxRange = 64.0; // 16-128 blocks
         // perspective skip specific
         public String perspectiveSkipMode = "skipBack"; // skipBack (F5 skips third-person-back) or skipFront (F5 skips front-facing)
+        // zoom specific
+        public String zoomMode = "hold"; // hold or toggle
+        public int zoomKey = 67; // GLFW key code (67 = C)
+        public double zoomLevel = 4.0; // FOV divisor while zoom key held (1.5-10)
+        public boolean zoomSmooth = true;
+        public double zoomSmoothSpeed = 0.4; // lerp factor per tick (0.05-1)
+        public boolean zoomLowerSensitivity = true;
+        // freelook specific
+        public String freelookMode = "hold"; // hold or toggle
+        public int freelookKey = 342; // GLFW key code (342 = Left Alt)
+        public double freelookSensitivity = 1.0; // mouse multiplier while active (0.25-3)
 
         public ModuleConfig() {}
         public ModuleConfig(boolean enabled, int x, int y) {
@@ -211,6 +222,8 @@ public class ConfigManager {
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("zoom", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("freelook", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
         // removed: testModule, armorStatus, fpsBoost (not implemented)
     }
@@ -304,6 +317,24 @@ public class ConfigManager {
         }
         ModuleConfig fb = modules.get("fullbright");
         if (fb != null && fb.fullbrightGamma == 0) fb.fullbrightGamma = 12.0;
+        // zoom level 1.5-10
+        ModuleConfig zoom = modules.get("zoom");
+        if (zoom != null) {
+            if (zoom.zoomLevel == 0) zoom.zoomLevel = 4.0;
+            zoom.zoomLevel = Math.max(1.5, Math.min(10.0, zoom.zoomLevel));
+            if (!"hold".equals(zoom.zoomMode) && !"toggle".equals(zoom.zoomMode)) zoom.zoomMode = "hold";
+            if (zoom.zoomSmoothSpeed == 0) zoom.zoomSmoothSpeed = 0.4;
+            zoom.zoomSmoothSpeed = Math.max(0.05, Math.min(1.0, zoom.zoomSmoothSpeed));
+            if (zoom.zoomKey <= 0) zoom.zoomKey = 67;
+        }
+        // freelook sensitivity 0.25-3
+        ModuleConfig freelook = modules.get("freelook");
+        if (freelook != null) {
+            if (freelook.freelookSensitivity == 0) freelook.freelookSensitivity = 1.0;
+            freelook.freelookSensitivity = Math.max(0.25, Math.min(3.0, freelook.freelookSensitivity));
+            if (!"hold".equals(freelook.freelookMode) && !"toggle".equals(freelook.freelookMode)) freelook.freelookMode = "hold";
+            if (freelook.freelookKey <= 0) freelook.freelookKey = 342;
+        }
     }
 
     public synchronized void save() {
@@ -451,6 +482,21 @@ public class ConfigManager {
             String m = data.get("perspectiveSkipMode").getAsString();
             if (m.equals("skipBack") || m.equals("skipFront")) cfg.perspectiveSkipMode = m;
         }
+        if (data.has("zoomLevel")) cfg.zoomLevel = data.get("zoomLevel").getAsDouble();
+        if (data.has("zoomSmooth")) cfg.zoomSmooth = data.get("zoomSmooth").getAsBoolean();
+        if (data.has("zoomSmoothSpeed")) cfg.zoomSmoothSpeed = data.get("zoomSmoothSpeed").getAsDouble();
+        if (data.has("zoomLowerSensitivity")) cfg.zoomLowerSensitivity = data.get("zoomLowerSensitivity").getAsBoolean();
+        if (data.has("zoomKey")) cfg.zoomKey = data.get("zoomKey").getAsInt();
+        if (data.has("zoomMode") && !data.get("zoomMode").isJsonNull()) {
+            String m = data.get("zoomMode").getAsString();
+            if (m.equals("hold") || m.equals("toggle")) cfg.zoomMode = m;
+        }
+        if (data.has("freelookMode") && !data.get("freelookMode").isJsonNull()) {
+            String m = data.get("freelookMode").getAsString();
+            if (m.equals("hold") || m.equals("toggle")) cfg.freelookMode = m;
+        }
+        if (data.has("freelookSensitivity")) cfg.freelookSensitivity = data.get("freelookSensitivity").getAsDouble();
+        if (data.has("freelookKey")) cfg.freelookKey = data.get("freelookKey").getAsInt();
         if (data.has("hitboxPlayers")) cfg.hitboxPlayers = data.get("hitboxPlayers").getAsBoolean();
         if (data.has("hitboxHostiles")) cfg.hitboxHostiles = data.get("hitboxHostiles").getAsBoolean();
         if (data.has("hitboxPassives")) cfg.hitboxPassives = data.get("hitboxPassives").getAsBoolean();

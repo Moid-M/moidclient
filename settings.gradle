@@ -6,6 +6,31 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        maven {
+            url = 'https://maven.kikugie.dev/releases'
+            name = 'KikuGie Releases'
+        }
+        maven {
+            url = 'https://maven.kikugie.dev/snapshots'
+            name = 'KikuGie Snapshots'
+        }
+    }
+}
+
+plugins {
+    id('dev.kikugie.stonecutter').version '0.9.8'
+}
+
+stonecutter {
+    // Enable Groovy DSL, as Stonecutter uses Kotlin by default
+    kotlinController = false
+    centralScript = 'build.gradle'
+
+    // The root project is the Tree (shared src/); each version is a Node.
+    create(getRootProject()) {
+        versions '26.1', '26.2'
+        // VCS version = state of src/ kept in git. Reset to this before committing.
+        vcsVersion = '26.1'
     }
 }
 

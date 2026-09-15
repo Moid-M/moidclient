@@ -63,12 +63,14 @@ public class ClientMod implements ClientModInitializer {
             LOGGER.error("[MoidClient] Failed to start Web GUI server", e);
         }
 
-        // 3) Keybind registration - default K
+        // 3) Keybind registration - dashboard key. Module hold-keys (zoom,
+        // freelook) are bound in the dashboard and polled via GLFW directly.
+        KeyMapping.Category moidCategory = KeyMapping.Category.register(Identifier.parse("moidclient:main"));
         openGuiKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.moidclient.openGui",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
-                KeyMapping.Category.register(Identifier.parse("moidclient:main"))
+                moidCategory
         ));
 
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
@@ -97,6 +99,8 @@ public class ClientMod implements ClientModInitializer {
             // cps tracking (every tick) with logging
             try { CpsHud.onTick(); } catch (Exception e) { LOGGER.error("[MoidClient] Cps tick failed", e); }
             try { FullbrightManager.onTick(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Fullbright tick failed", e); }
+            try { com.moidclient.utility.zoom.ZoomManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Zoom tick failed", e); }
+            try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }
             // live stats for editor - throttled 20 ticks (1s) to keep WS stable
             // only poll/broadcast when at least one WS client is connected
             if (++liveTick % 20 == 0 && !networkPackets.getSessions().isEmpty()) {

@@ -23,6 +23,7 @@ const ICONS = {
   server:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>`,
   clock:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>`,
   mountain: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l6-11 4 6 2.5-3.5L21 19H3z"/></svg>`,
+  eye: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>`,
 };
 const FALLBACK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>`;
 function iconFor(id){ const m=MODULES_META[id]; return (m && ICONS[m.icon]) || FALLBACK_ICON; }
@@ -581,8 +582,23 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
       ${pickerPanelHtml(ck, withAlpha)}
     </div>`;
 }
-function optionHtml(id, opt, data){
-  const key = opt.key, type = opt.type || 'text', label = opt.label || key;
+// GLFW key codes <-> display names for the "keybind" option type.
+// Values are polled in-game via GLFW directly, so any keyboard key works.
+const GLFW_KEY_NAMES = {32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
+for(let c=48;c<=57;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
+for(let c=65;c<=90;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
+function keyName(code){ return GLFW_KEY_NAMES[code] || ('Key ' + code); }
+// KeyboardEvent.code -> GLFW key code for capture. Unknown codes are ignored.
+const CODE_FROM_KEYBOARD = {'Space':32,'Enter':257,'NumpadEnter':257,'Tab':258,'Backspace':259,'Escape':null,'CapsLock':280,'ShiftLeft':340,'ShiftRight':344,'ControlLeft':341,'ControlRight':345,'AltLeft':342,'AltRight':346,'MetaLeft':343,'MetaRight':347,'Insert':260,'Delete':261,'Home':268,'End':269,'PageUp':266,'PageDown':267,'ArrowRight':262,'ArrowLeft':263,'ArrowDown':264,'ArrowUp':265,'Minus':45,'Equal':61,'BracketLeft':91,'BracketRight':93,'Backslash':92,'Semicolon':59,'Quote':39,'Backquote':96,'Comma':44,'Period':46,'Slash':47};
+for(let c=48;c<=57;c++) CODE_FROM_KEYBOARD['Digit'+String.fromCharCode(c)]=c;
+for(let c=65;c<=90;c++) CODE_FROM_KEYBOARD['Key'+String.fromCharCode(c)]=c;
+for(let f=1;f<=12;f++) CODE_FROM_KEYBOARD['F'+f]=289+f;
+function updateKeybindTab(){
+  const z=document.querySelector('#kbZoomKey'), f=document.querySelector('#kbFreelookKey');
+  if(z) z.textContent=keyName(config.modules?.zoom?.zoomKey ?? 67);
+  if(f) f.textContent=keyName(config.modules?.freelook?.freelookKey ?? 342);
+}
+function optionHtml(id, opt, data){  const key = opt.key, type = opt.type || 'text', label = opt.label || key;
   const hint = opt.hint ? ` <span class="text-[10px]">${opt.hint}</span>` : '';
   const val = data[key];
   if(type === 'boolean'){
@@ -609,6 +625,13 @@ function optionHtml(id, opt, data){
   }
   if(type === 'color'){
     return colorOptionHtml(id, key, label, opt.hint, val || '', opt.placeholder, !!opt.nullable, true);
+  }
+  if(type === 'keybind'){
+    const code = (val ?? opt.default ?? 0);
+    return `<div class="flex items-center justify-between gap-3">
+      <span class="text-xs" style="color:var(--text-muted)">${label}${hint}</span>
+      <button data-keybind="${id}:${key}" class="px-3 py-1.5 rounded-full border text-xs font-medium shrink-0" style="border-color:var(--border);background:var(--bg);color:var(--text-bright);font-family:'JetBrains Mono',monospace"><span data-keybind-label="${id}:${key}">${escAttr(keyName(code))}</span></button>
+    </div>`;
   }
   return `<label class="text-xs flex flex-col gap-1.5" style="color:var(--text-muted)">${label}${hint}
       <input data-field="${key}" data-id="${id}" value="${escAttr(val ?? '')}" placeholder="${escAttr(opt.placeholder || '')}" spellcheck="false" class="field-input w-full px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
@@ -853,6 +876,36 @@ function render(animate=false){
       const patch={}; patch[key]=next; send({type:'UPDATE_MODULE',id,data:patch});
     };
   });
+  $$('[data-keybind]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.stopPropagation();
+      const ck=btn.getAttribute('data-keybind');
+      const parts=ck.split(':'); const id=parts[0]; const key=parts.slice(1).join(':');
+      const lbl=btn.querySelector('[data-keybind-label]') || btn;
+      if(btn.dataset.listening==='1'){
+        btn.dataset.listening='';
+        lbl.textContent=keyName(config.modules[id]?.[key] ?? 0);
+        return;
+      }
+      btn.dataset.listening='1'; lbl.textContent='press a key…';
+      const done=(code)=>{
+        btn.dataset.listening='';
+        window.removeEventListener('keydown', onKey, true);
+        if(code==null){ lbl.textContent=keyName(config.modules[id]?.[key] ?? 0); return; }
+        const patch={}; patch[key]=code; send({type:'UPDATE_MODULE',id,data:patch});
+        const m=config.modules[id]=config.modules[id]||{}; m[key]=code;
+        lbl.textContent=keyName(code); updateKeybindTab();
+      };
+      const onKey=(ev)=>{
+        ev.preventDefault(); ev.stopPropagation();
+        if(ev.code==='Escape'){ done(null); return; }
+        const code=CODE_FROM_KEYBOARD[ev.code];
+        if(code==null){ lbl.textContent='unknown key…'; setTimeout(()=>{ if(btn.dataset.listening==='1') lbl.textContent='press a key…'; }, 600); return; }
+        done(code);
+      };
+      window.addEventListener('keydown', onKey, true);
+    };
+  });
   $$('[data-reveal-toggle]').forEach(btn=>{
     btn.onclick=(e)=>{
       e.stopPropagation();
@@ -1032,7 +1085,17 @@ function patchFromSync(newData){
       if(parts[0]!==id) return;
       t.classList.toggle('active', !!data[parts.slice(1).join(':')]);
     });
+    card.querySelectorAll('[data-keybind-label]').forEach(sp=>{
+      const parts=sp.getAttribute('data-keybind-label').split(':');
+      if(parts[0]!==id) return;
+      const k=parts.slice(1).join(':');
+      const v=data[k];
+      if(v===undefined || v===null) return;
+      if(sp.closest('[data-keybind]')?.dataset.listening==='1') return;
+      sp.textContent=keyName(v);
+    });
   });
+  updateKeybindTab();
   const existingIds=new Set([...document.querySelectorAll('.card[data-id]')].map(c=>c.getAttribute('data-id')));
   const neededIds=focusedId ? [focusedId] : MODULE_ORDER.slice();
   const needsFull = neededIds.some(id=> !existingIds.has(id)) || existingIds.size !== neededIds.length;

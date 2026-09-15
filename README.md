@@ -20,12 +20,12 @@ A lightweight, open-source Fabric client with a clickgui that runs entirely in y
 | 26.2 | >=0.18.0 (tested 0.19.5) | 25 | ✅ Supported |
 | 26.3 | — | — | ❌ Not supported — no stable release exists yet, only snapshots and release candidates. Support lands once Mojang ships it. |
 
-Requires **Java 25** (Temurin 25+). One universal jar works on all supported Minecraft versions — download `Moid-Client-v1.1.0.jar` from [Releases](../../releases).
+Requires **Java 25** (Temurin 25+). One jar per Minecraft version — download the one matching your game (`Moid-Client-v1.1.0+26.1.jar` or `...+26.2.jar`) from [Releases](../../releases).
 
 ## Installation
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.18.0 or newer for your Minecraft version (26.1 or 26.2).
-2. Download the universal jar from [Releases](../../releases) (`Moid-Client-v1.1.0.jar` — works on 26.1 and 26.2).
+2. Download the jar matching your game from [Releases](../../releases) (`Moid-Client-v1.1.0+26.1.jar` or `Moid-Client-v1.1.0+26.2.jar`).
 3. Drop it into your `.minecraft/mods` folder (with `fabric-api` if not already present).
 4. Launch Minecraft. Moid starts a local webserver — press `K` (or check the game log) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
 
@@ -52,14 +52,14 @@ drift into the prose sections above.
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
 | Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
 | Perspective Skip | Utility | F5 skips a third-person view — back or front, selectable | ✅ |
+| Zoom | Utility | FOV zoom, hold/toggle, rebindable in dashboard | ✅ |
+| FreeLook | Utility | 360° camera + auto third-person, hold/toggle, rebindable | ✅ |
 | Custom Hitboxes | Visuals | Always-on entity hitboxes with per-group colors, eye lines | ✅ |
 
 **Planned / in progress:**
 
 | Module | Category | Description |
 |---|---|---|
-| Zoom | Utility | Hold-key FOV zoom with smoothing |
-| FreeLook | Utility | Hold-key 360° camera, movement stays put |
 | Crosshair Customization | HUD | Custom crosshair styles, colors, sizes |
 
 ## How Moid Compares
@@ -91,12 +91,17 @@ Moid's performance goals are scoped to:
 ```bash
 git clone https://github.com/moid-m/moidclient.git
 cd moidclient
-./gradlew build # requires Java 25 — universal jar lands in build/libs/Moid-Client-v1.1.0.jar (runs on 26.1–26.2)
+./gradlew :26.1:build # requires Java 25 — jar lands in versions/26.1/build/libs/
+./gradlew :26.1:build :26.2:build # all supported versions, one jar each
 ```
+
+This repo uses [Stonecutter](https://stonecutter.kikugie.dev/): one shared `src/`, one Gradle subproject per Minecraft version (`versions/<mc>/`). Version-specific code goes in `//?` blocks; everything else is shared.
 
 ## Contributing
 
-Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer, a `preview()` for the HUD editor, and `ConfigManager.ModuleConfig` fields — the dashboard cards, `/api/modules`, and editor previews pick it up automatically, no frontend changes needed.
+Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer, a `preview()` for the HUD editor, `ConfigManager.ModuleConfig` fields, and one `ModuleRegistry.register()` line — the dashboard cards, `/api/modules`, and editor previews pick it up automatically, no frontend changes needed (new option types like `keybind` are the only exception).
+
+Stonecutter note: run `./gradlew "Reset active project"` (back to the VCS version, 26.1) before committing, so no preprocessor noise lands in git.
 
 ## License
 

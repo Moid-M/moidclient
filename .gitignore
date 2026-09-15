@@ -1,4 +1,6 @@
 /build/
+versions/*/build/
+stonecutter.gradle
 /out/
 /dist/
 .gradle/
@@ -17,6 +19,8 @@ fabric.mod.json.bak
 # local secrets — never commit
 github-token.txt
 *token*.txt
+# local agent handoff notes — never commit
+AGENT.md
 *.bak
 *.zip
 src-backup-*.zip
@@ -24,3 +28,5 @@ src-backup-*.zip
 # OS
 .DS_Store
 Thumbs.db
+# local website preview (moidclient.com static site, plain html/css/js)
+/website/
