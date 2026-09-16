@@ -88,7 +88,7 @@ Moid does not include its own rendering/FPS-optimization mods — that space is 
 
 Moid's performance goals are scoped to:
 1. Not degrading your game's performance — the client itself stays lightweight.
-2. Working alongside Sodium and similar optimization mods rather than conflicting with them. Tested with Sodium `0.6` on 26.1.
+2. Working alongside Sodium and similar optimization mods rather than conflicting with them.
 
 ## Building from Source
 
