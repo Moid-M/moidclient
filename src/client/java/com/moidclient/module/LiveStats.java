@@ -20,11 +20,13 @@ public final class LiveStats {
     public final boolean shift;
     public final boolean lmb;
     public final boolean rmb;
+    public final double tps;
 
     public LiveStats(int ping, int fps, int cpsLeft, int cpsRight,
                      int peakLeft, int peakRight,
                      boolean w, boolean a, boolean s, boolean d,
-                     boolean space, boolean shift, boolean lmb, boolean rmb) {
+                     boolean space, boolean shift, boolean lmb, boolean rmb,
+                     double tps) {
         this.ping = ping;
         this.fps = fps;
         this.cpsLeft = cpsLeft;
@@ -39,6 +41,7 @@ public final class LiveStats {
         this.shift = shift;
         this.lmb = lmb;
         this.rmb = rmb;
+        this.tps = tps;
     }
 
     public boolean anyKeyPressed() {

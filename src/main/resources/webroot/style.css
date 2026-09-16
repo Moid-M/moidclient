@@ -381,3 +381,9 @@ button[class*="rounded-"], .btn-accent, .field-input, .focus-bar{
 .sv-box{ border-radius: 16px !important; }
 .hue-bar{ border-radius: 999px !important; }
 .number-wrap{ border-radius: 999px !important; }
+
+/* offline lock: config surface is dead while disconnected (banner explains why). Navigation stays usable. */
+body.offline .card{ pointer-events:none; opacity:.72; filter:saturate(.65); }
+body.offline .card{ cursor:not-allowed; }
+body.offline #accentBtn, body.offline #exportBtn, body.offline #importBtn{ pointer-events:none; opacity:.5; }
+

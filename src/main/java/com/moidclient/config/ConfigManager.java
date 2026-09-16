@@ -2,6 +2,7 @@ package com.moidclient.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
@@ -40,8 +41,7 @@ public class ConfigManager {
     public static class ModuleConfig {
         public boolean enabled = false;
         public int x = 10;
-        public int y = 10;
-        public double scale = 1.0;
+        public int y = 10;        public double scale = 1.0;
         public double opacity = 1.0; // text opacity
         public double backgroundOpacity = 0.85; // independent background opacity
         public String color = null; // legacy
@@ -57,6 +57,8 @@ public class ConfigManager {
         // cps specific
         public String cpsMode = "both"; // both / left / right
         public boolean cpsDynamicColor = false;
+        // tps specific
+        public boolean tpsDynamicColor = true; // false=white, true=health bands
         // keystrokes specific - Feather/Lunar-like
         public boolean keystrokesShowMouse = true;
         public boolean keystrokesShowSpace = true;
@@ -106,6 +108,10 @@ public class ConfigManager {
         public String freelookMode = "hold"; // hold or toggle
         public int freelookKey = 342; // GLFW key code (342 = Left Alt)
         public double freelookSensitivity = 1.0; // mouse multiplier while active (0.25-3)
+        // Catch-all for options this class doesn't know: future modules and
+        // plugins store arbitrary validated primitives here, so adding an
+        // option no longer requires editing this file. Serialized as-is.
+        public Map<String, JsonElement> custom = new LinkedHashMap<>();
 
         public ModuleConfig() {}
         public ModuleConfig(boolean enabled, int x, int y) {
@@ -214,6 +220,7 @@ public class ConfigManager {
     private void ensureDefaults(boolean overwrite) {
         registerDefault("ping", new ModuleConfig(false, 10, 50), overwrite);
         registerDefault("fpsCounter", new ModuleConfig(false, 10, 10), overwrite);
+        registerDefault("tpsCounter", new ModuleConfig(false, 10, 70), overwrite);
         registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
         registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
         registerDefault("coords", new ModuleConfig(false, 10, 110), overwrite);
@@ -240,6 +247,7 @@ public class ConfigManager {
         modules.keySet().removeIf(k -> k.equals("testModule") || k.equals("armorStatus") || k.equals("fpsBoost"));
         for (var e : modules.entrySet()) {
             ModuleConfig c = e.getValue();
+            if (c.custom == null) c.custom = new LinkedHashMap<>();
             if (c.backgroundColor == null) c.backgroundColor = "#1A1B20";
             if (c.backgroundOpacity == 0) {
                 // migrate from old opacity*0.85 or default 0.85
@@ -268,6 +276,7 @@ public class ConfigManager {
                 switch (e.getKey()) {
                     case "ping" -> c.format = "Ping: {ping} ms";
                     case "fpsCounter" -> c.format = "FPS: {fps}";
+                    case "tpsCounter" -> c.format = "TPS: {tps}";
                     case "cpsCounter" -> c.format = "CPS: {left} | {right}";
                     case "coords" -> c.format = "XYZ: {x} | {y} | {z}";
                     case "server" -> c.format = "Server: {server}";
@@ -311,6 +320,8 @@ public class ConfigManager {
             if (fps.format == null) fps.format = "FPS: {fps}";
             if (fps.fpsMode == null) fps.fpsMode = "stable";
         }
+        ModuleConfig tps = modules.get("tpsCounter");
+        if (tps != null && tps.format == null) tps.format = "TPS: {tps}";
         ModuleConfig cps = modules.get("cpsCounter");
         if (cps != null) {
             if (cps.format == null) cps.format = "CPS: {left} | {right}";
@@ -414,12 +425,33 @@ public class ConfigManager {
         return out;
     }
 
+    /** Every key handled explicitly in {@link #updateModule}. Anything else
+     * falls into {@code ModuleConfig.custom} (validated) so new options work
+     * without editing this file. Keep in sync when adding explicit fields. */
+    private static final java.util.Set<String> KNOWN_MODULE_KEYS = java.util.Set.of(
+        "enabled", "x", "y", "scale", "opacity", "backgroundOpacity", "color",
+        "background", "backgroundColor", "textColor", "format", "shadow",
+        "fpsMode", "fpsDynamicColor", "tpsDynamicColor", "cpsMode", "cpsDynamicColor",
+        "keystrokesShowMouse", "keystrokesShowSpace", "keystrokesShowShift",
+        "keystrokesShowW", "keystrokesShowA", "keystrokesShowS", "keystrokesShowD",
+        "keystrokesShowCps", "keystrokesGap", "keystrokesOutline", "keystrokesPressedColor",
+        "fullbrightGamma", "blockOutlineWidth", "blockOutlineFade", "blockOutlineColor2",
+        "blockOutlineMode", "perspectiveSkipMode",
+        "hitboxPlayers", "hitboxHostiles", "hitboxPassives", "hitboxOther",
+        "hitboxEyeLine", "hitboxEyeLength", "hitboxPadding", "hitboxRenderRate",
+        "hitboxWidth", "hitboxOpacity", "hitboxRange",
+        "hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor",
+        "zoomMode", "zoomKey", "zoomLevel", "zoomSmooth", "zoomSmoothSpeed", "zoomLowerSensitivity",
+        "freelookMode", "freelookKey", "freelookSensitivity"
+    );
+
     public void updateModule(String id, JsonObject data) {
         ModuleConfig cfg = modules.get(id);
         if (cfg == null) {
             cfg = new ModuleConfig();
             modules.put(id, cfg);
         }
+        if (cfg.custom == null) cfg.custom = new LinkedHashMap<>();
         if (data.has("enabled")) cfg.enabled = data.get("enabled").getAsBoolean();
         if (data.has("x")) cfg.x = data.get("x").getAsInt();
         if (data.has("y")) cfg.y = data.get("y").getAsInt();
@@ -446,6 +478,7 @@ public class ConfigManager {
             if (m.equals("fast") || m.equals("stable")) cfg.fpsMode = m;
         }
         if (data.has("fpsDynamicColor")) cfg.fpsDynamicColor = data.get("fpsDynamicColor").getAsBoolean();
+        if (data.has("tpsDynamicColor")) cfg.tpsDynamicColor = data.get("tpsDynamicColor").getAsBoolean();
         if (data.has("cpsMode") && !data.get("cpsMode").isJsonNull()) {
             String m = data.get("cpsMode").getAsString();
             if (m.equals("both") || m.equals("left") || m.equals("right")) cfg.cpsMode = m;
@@ -523,6 +556,23 @@ public class ConfigManager {
                     else cfg.hitboxOtherColor = c;
                 }
             }
+        }
+        // Unknown keys (future/plugin options): keep validated primitives so
+        // new options round-trip without code changes. Keys are restricted to
+        // plain identifiers, strings capped, no objects/arrays.
+        for (var entry : data.entrySet()) {
+            String key = entry.getKey();
+            if (KNOWN_MODULE_KEYS.contains(key)) continue;
+            if (!key.matches("[A-Za-z][A-Za-z0-9_]{0,63}")) continue;
+            JsonElement value = entry.getValue();
+            if (value == null || value.isJsonNull() || !value.isJsonPrimitive()) continue;
+            var primitive = value.getAsJsonPrimitive();
+            if (primitive.isString() && primitive.getAsString().length() > 512) continue;
+            if (primitive.isNumber()) {
+                double number = primitive.getAsDouble();
+                if (Double.isNaN(number) || Double.isInfinite(number)) continue;
+            }
+            cfg.custom.put(key, value.deepCopy());
         }
         save();
     }

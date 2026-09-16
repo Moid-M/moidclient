@@ -11,6 +11,7 @@ import com.moidclient.hud.fps.FpsHud;
 import com.moidclient.hud.keystrokes.KeystrokesHud;
 import com.moidclient.hud.ping.PingHud;
 import com.moidclient.hud.server.ServerHud;
+import com.moidclient.hud.tps.TpsHud;
 import com.moidclient.utility.freelook.FreeLookManager;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.utility.zoom.ZoomManager;
@@ -42,6 +43,7 @@ public final class ModuleRegistry {
     static {
         register(PingHud::definition, PingHud::preview);
         register(FpsHud::definition, FpsHud::preview);
+        register(TpsHud::definition, TpsHud::preview);
         register(CpsHud::definition, CpsHud::preview);
         register(KeystrokesHud::definition, KeystrokesHud::preview);
         register(CoordinatesHud::definition, CoordinatesHud::preview);

@@ -28,7 +28,7 @@ stonecutter {
 
     // The root project is the Tree (shared src/); each version is a Node.
     create(getRootProject()) {
-        versions '26.1', '26.2'
+        versions '26.1', '26.2', '26.3'
         // VCS version = state of src/ kept in git. Reset to this before committing.
         vcsVersion = '26.1'
     }

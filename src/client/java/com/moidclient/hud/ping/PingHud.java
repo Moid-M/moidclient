@@ -39,7 +39,8 @@ public final class PingHud {
 
         int ping = getPing();
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "Ping: {ping} ms";
-        String text = fmt.replace("{ping}", String.valueOf(ping)).replace("{value}", String.valueOf(ping));
+        String shown = ping < 0 ? "—" : String.valueOf(ping);
+        String text = fmt.replace("{ping}", shown).replace("{value}", shown);
 
         int color;
         if (mod.textColor != null && !mod.textColor.isEmpty()) {
@@ -84,28 +85,33 @@ public final class PingHud {
         if (mod == null) return null;
         int ping = stats != null ? stats.ping : 0;
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "Ping: {ping} ms";
-        String text = fmt.replace("{ping}", String.valueOf(ping)).replace("{value}", String.valueOf(ping));
+        String shown = ping < 0 ? "—" : String.valueOf(ping);
+        String text = fmt.replace("{ping}", shown).replace("{value}", shown);
         int[] size = HudManager.measureText(text, mod.background);
         return new ModulePreview("ping", text, "text", size[0], size[1], false);
     }
 
+    /**
+     * Current latency, or -1 when unknown (no connection). Singleplayer
+     * reports 0, which correctly lands in the green bracket below.
+     */
     private static int getPing() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc.getConnection() == null) return 0;
-            if (mc.player == null) return 0;
+            if (mc.getConnection() == null) return -1;
+            if (mc.player == null) return -1;
             var info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
-            if (info == null) return 0;
+            if (info == null) return -1;
             return info.getLatency();
         } catch (Exception e) {
-            return 0;
+            return -1;
         }
     }
 
     private static int colorForPing(int ping, double opacity) {
         int alpha = (int) Math.round(Math.max(0, Math.min(1, opacity)) * 255);
         int rgb;
-        if (ping <= 0) rgb = 0x9CA3AF;
+        if (ping < 0) rgb = 0x9CA3AF;
         else if (ping < 80) rgb = 0x10B981;
         else if (ping < 150) rgb = 0xF59E0B;
         else rgb = 0xEF4444;

@@ -13,11 +13,9 @@ import com.moidclient.visuals.fullbright.FullbrightManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,9 +36,12 @@ public class ClientMod implements ClientModInitializer {
     private NetworkPackets networkPackets;
     private ServerManager serverManager;
     private KeyMapping openGuiKey;
+    private KeyMapping zoomKey;
+    private KeyMapping freeLookKey;
     private int lastWindowWidth=-1, lastWindowHeight=-1, lastScaledW=-1, lastScaledH=-1;
     private int windowTick=0;
     private int liveTick=0;
+    private int keySyncTick=0;
 
     @Override
     public void onInitializeClient() {
@@ -63,15 +64,48 @@ public class ClientMod implements ClientModInitializer {
             LOGGER.error("[MoidClient] Failed to start Web GUI server", e);
         }
 
-        // 3) Keybind registration - dashboard key. Module hold-keys (zoom,
-        // freelook) are bound in the dashboard and polled via GLFW directly.
+        // 3) Keybind registration - dashboard key plus module hold-keys.
+        // Zoom/FreeLook live in vanilla Controls (rebindable in-game) AND in
+        // the dashboard (rebindable there): managers sync the dashboard value
+        // into the vanilla mapping every tick, vanilla persists it.
+        // Codes go through NativeKeys so 26.3 (SDL) gets translated values.
         KeyMapping.Category moidCategory = KeyMapping.Category.register(Identifier.parse("moidclient:main"));
         openGuiKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.moidclient.openGui",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                com.moidclient.utility.keybind.NativeKeys.keyType(),
+                com.moidclient.utility.keybind.NativeKeys.toNative(
+                    com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_K),
                 moidCategory
         ));
+        zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.moidclient.zoom",
+                com.moidclient.utility.keybind.NativeKeys.keyType(),
+                com.moidclient.utility.keybind.NativeKeys.toNative(
+                    com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_C),
+                moidCategory
+        ));
+        freeLookKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.moidclient.freelook",
+                com.moidclient.utility.keybind.NativeKeys.keyType(),
+                com.moidclient.utility.keybind.NativeKeys.toNative(
+                    com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_ALT),
+                moidCategory
+        ));
+        // Controls screen is master on boot: adopt live bindings into config
+        // (translated back to dashboard/GLFW numbering).
+        try {
+            var zoomMod = configManager.getModule("zoom");
+            if (zoomMod != null) {
+                int live = com.moidclient.util.KeybindUtil.readCode(zoomKey);
+                if (live > 0) zoomMod.zoomKey = com.moidclient.utility.keybind.NativeKeys.fromNative(live);
+            }
+            var freelookMod = configManager.getModule("freelook");
+            if (freelookMod != null) {
+                int live = com.moidclient.util.KeybindUtil.readCode(freeLookKey);
+                if (live > 0) freelookMod.freelookKey = com.moidclient.utility.keybind.NativeKeys.fromNative(live);
+            }
+            configManager.save();
+        } catch (Exception e) { LOGGER.error("[MoidClient] Failed to adopt keybinds", e); }
 
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             try { PerspectiveSkipManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] PerspectiveSkip tick failed", e); }
@@ -99,8 +133,13 @@ public class ClientMod implements ClientModInitializer {
             // cps tracking (every tick) with logging
             try { CpsHud.onTick(); } catch (Exception e) { LOGGER.error("[MoidClient] Cps tick failed", e); }
             try { FullbrightManager.onTick(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Fullbright tick failed", e); }
-            try { com.moidclient.utility.zoom.ZoomManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Zoom tick failed", e); }
-            try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }
+            try { com.moidclient.utility.zoom.ZoomManager.onTick(client, configManager, zoomKey); } catch (Exception e) { LOGGER.error("[MoidClient] Zoom tick failed", e); }
+            try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager, freeLookKey); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }
+            // reverse keybind sync (Controls -> dashboard), throttled 1s:
+            // adopt live bindings changed in-game so the dashboard follows.
+            if (++keySyncTick % 20 == 0) {
+                try { syncKeybindsToDashboard(); } catch (Exception e) { LOGGER.error("[MoidClient] Keybind sync failed", e); }
+            }
             // live stats for editor - throttled 20 ticks (1s) to keep WS stable
             // only poll/broadcast when at least one WS client is connected
             if (++liveTick % 20 == 0 && !networkPackets.getSessions().isEmpty()) {
@@ -111,22 +150,21 @@ public class ClientMod implements ClientModInitializer {
                     boolean w=false,a=false,s=false,d=false,space=false,shift=false,lmb=false,rmb=false;
                     try { cpsL = CpsHud.getLeftCps(); cpsR = CpsHud.getRightCps(); } catch (Exception e) { LOGGER.warn("[MoidClient] cps get failed", e); }
                     try {
-                        var win = Minecraft.getInstance().getWindow();
-                        if (win != null) {
-                            long h = win.handle();
-                            w = org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_W) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            a = org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_A) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            s = org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_S) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            d = org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_D) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            space = org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            shift = org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS || org.lwjgl.glfw.GLFW.glfwGetKey(h, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            lmb = org.lwjgl.glfw.GLFW.glfwGetMouseButton(h, org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                            rmb = org.lwjgl.glfw.GLFW.glfwGetMouseButton(h, org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
-                        }
+                        var mc = Minecraft.getInstance();
+                        w = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_W);
+                        a = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_A);
+                        s = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_S);
+                        d = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_D);
+                        space = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_SPACE);
+                        shift = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_SHIFT)
+                            || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_RIGHT_SHIFT);
+                        lmb = com.moidclient.utility.keybind.NativeKeys.isMouseDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_LEFT);
+                        rmb = com.moidclient.utility.keybind.NativeKeys.isMouseDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_RIGHT);
                     } catch (Exception e) { LOGGER.warn("[MoidClient] key poll failed", e); }
                     com.moidclient.module.LiveStats stats = new com.moidclient.module.LiveStats(
                             ping, fps, cpsL, cpsR, CpsHud.getPeakLeft(), CpsHud.getPeakRight(),
-                            w, a, s, d, space, shift, lmb, rmb);
+                            w, a, s, d, space, shift, lmb, rmb,
+                            com.moidclient.hud.tps.TpsHud.getCurrentTps());
                     com.google.gson.JsonObject previews = com.moidclient.module.ModuleRegistry.previews(configManager, stats);
                     networkPackets.broadcastLiveStats(ping, fps, cpsL, cpsR, w, a, s, d, space, shift, lmb, rmb, previews);
                 } catch (Exception e) { LOGGER.error("[MoidClient] live stats broadcast failed", e); }
@@ -210,6 +248,42 @@ public class ClientMod implements ClientModInitializer {
             LOGGER.debug("[MoidClient] Util.open fallback failed: {}", e.getMessage());
         }
         return false;
+    }
+
+    /**
+     * Reverse keybind sync: if a binding was changed in Controls, adopt the
+     * live value into the config and push it to the dashboard. The push
+     * tracker is informed so the forward path doesn't fight it back.
+     * Live codes are translated to dashboard numbering first.
+     */
+    private void syncKeybindsToDashboard() {
+        try {
+            boolean changed = false;
+            var zoomMod = configManager.getModule("zoom");
+            if (zoomMod != null && zoomKey != null) {
+                int live = com.moidclient.util.KeybindUtil.readCode(zoomKey);
+                int code = live > 0 ? com.moidclient.utility.keybind.NativeKeys.fromNative(live) : -1;
+                if (code > 0 && code != zoomMod.zoomKey) {
+                    zoomMod.zoomKey = code;
+                    com.moidclient.utility.keybind.Keybinds.noteApplied(zoomKey, code);
+                    changed = true;
+                }
+            }
+            var freelookMod = configManager.getModule("freelook");
+            if (freelookMod != null && freeLookKey != null) {
+                int live = com.moidclient.util.KeybindUtil.readCode(freeLookKey);
+                int code = live > 0 ? com.moidclient.utility.keybind.NativeKeys.fromNative(live) : -1;
+                if (code > 0 && code != freelookMod.freelookKey) {
+                    freelookMod.freelookKey = code;
+                    com.moidclient.utility.keybind.Keybinds.noteApplied(freeLookKey, code);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                configManager.save();
+                networkPackets.broadcastSync();
+            }
+        } catch (Exception ignored) {}
     }
 
     public static ClientMod getInstance() { return INSTANCE; }

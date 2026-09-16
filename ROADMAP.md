@@ -8,6 +8,7 @@ Finished modules also live in the README table; this file tracks everything else
 | Module | Category | ID |
 |---|---|---|
 | FPS Counter | HUD | `fpsCounter` |
+| TPS Counter | HUD | `tpsCounter` |
 | Ping HUD | HUD | `ping` |
 | CPS Counter | HUD | `cpsCounter` |
 | Keystrokes | HUD | `keystrokes` |
@@ -26,11 +27,11 @@ Finished modules also live in the README table; this file tracks everything else
 
 - [x] **Zoom** (`zoom`, Utility) — hold/toggle, dashboard-rebindable key, level slider, per-frame exponential smooth in/out (toggleable) + speed, lower sensitivity. Camera mixin overwrites computed FOV; user option untouched.
 - [x] **FreeLook** (`freelook`, Utility) — hold/toggle, dashboard-rebindable key, auto third-person-back on engage (restores after), sensitivity slider. The project's first mixin (camera detach + turn reroute).
-- [ ] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`isKeyDown(int)`, KEYBOARD enum, key-code translation). Range stays `<26.3` until this lands.
+- [x] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`NativeKeys`: `isKeyDown(int)`, KEYBOARD enum, GLFW↔SDL code translation, MouseHandler buttons). First `//?` blocks in `src/`. In-game verification pending.
 
 ## 🧱 Infra
 
-- [x] **Stonecutter migration** — one shared `src/`, per-version nodes (`versions/26.1`, `versions/26.2`), per-version jars (`Moid-Client-v1.1.0+26.x.jar`). Build one: `./gradlew :26.1:build`. Build all: `./gradlew :26.1:build :26.2:build`. Reset to VCS version before committing: `./gradlew "Reset active project"`.
+- [x] **Stonecutter migration** — one shared `src/`, per-version nodes (`versions/26.1`, `versions/26.2`, `versions/26.3`), per-version jars (`Moid-Client-v1.2.0+26.x.jar`). Build one: `./gradlew :26.3:build`. Build all: `./gradlew :26.1:build :26.2:build :26.3:build`. Reset to VCS version before committing: `./gradlew "Reset active project"`.
 
 ## ⏭ Next up (agreed core gaps)
 
@@ -42,6 +43,8 @@ Finished modules also live in the README table; this file tracks everything else
 | Potion Effects | HUD | same tier as armor |
 | Crosshair Customization | HUD | already planned in README |
 | Direction / Compass | HUD | cheap, loved by builders/PvPers |
+| Combo Counter | HUD | consecutive hits, PvP staple, needs attack hook |
+| Session Timer | HUD | uptime clock, trivial, fits dashboard vibe |
 
 ## 💡 Parked ideas (later)
 
@@ -50,6 +53,9 @@ Finished modules also live in the README table; this file tracks everything else
 - Particles multiplier (Visuals)
 - Nametag tweaks, subtle only (Visuals)
 - Item counter / durability warnings (HUD)
+- Memory usage (HUD, trivial via Runtime, debug flavor)
+- Reach Display (HUD, last-attack distance, needs attack hook like Combo)
+- Auto Reconnect (Utility, rejoin after disconnect, needs care on servers)
 
 ## 🚫 Out of scope
 

@@ -18,14 +18,14 @@ A lightweight, open-source Fabric client with a clickgui that runs entirely in y
 |---|---|---|---|
 | 26.1 – 26.1.2 | >=0.18.0 (tested 0.19.3) | 25 | ✅ Supported |
 | 26.2 | >=0.18.0 (tested 0.19.5) | 25 | ✅ Supported |
-| 26.3 | — | — | ❌ Not supported — no stable release exists yet, only snapshots and release candidates. Support lands once Mojang ships it. |
+| 26.3 | >=0.18.0 (tested 0.19.5) | 25 | ✅ Supported |
 
-Requires **Java 25** (Temurin 25+). One jar per Minecraft version — download the one matching your game (`Moid-Client-v1.1.0+26.1.jar` or `...+26.2.jar`) from [Releases](../../releases).
+Requires **Java 25** (Temurin 25+). One jar per Minecraft version — download the one matching your game (`Moid-Client-v1.2.0+26.1.jar`, `...+26.2.jar` or `...+26.3.jar`) from [Releases](../../releases).
 
 ## Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) 0.18.0 or newer for your Minecraft version (26.1 or 26.2).
-2. Download the jar matching your game from [Releases](../../releases) (`Moid-Client-v1.1.0+26.1.jar` or `Moid-Client-v1.1.0+26.2.jar`).
+1. Install [Fabric Loader](https://fabricmc.net/use/) 0.18.0 or newer for your Minecraft version (26.1, 26.2 or 26.3).
+2. Download the jar matching your game from [Releases](../../releases) (`Moid-Client-v1.2.0+26.1.jar`, `...+26.2.jar` or `...+26.3.jar`).
 3. Drop it into your `.minecraft/mods` folder (with `fabric-api` if not already present).
 4. Launch Minecraft. Moid starts a local webserver — press `K` (or check the game log) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
 
@@ -42,6 +42,7 @@ drift into the prose sections above.
 | Module | Category | Description | Status |
 |---|---|---|---|
 | FPS Counter | HUD | Displays current frames per second | ✅ |
+| TPS Counter | HUD | Displays server ticks per second, colored by health | ✅ |
 | Ping HUD | HUD | Displays current server ping | ✅ |
 | CPS Counter | HUD | Displays clicks per second | ✅ |
 | Keystrokes | HUD | Displays currently pressed movement/action keys | ✅ |
@@ -91,8 +92,8 @@ Moid's performance goals are scoped to:
 ```bash
 git clone https://github.com/moid-m/moidclient.git
 cd moidclient
-./gradlew :26.1:build # requires Java 25 — jar lands in versions/26.1/build/libs/
-./gradlew :26.1:build :26.2:build # all supported versions, one jar each
+./gradlew :26.3:build # requires Java 25 — jar lands in versions/26.3/build/libs/
+./gradlew :26.1:build :26.2:build :26.3:build # all supported versions, one jar each
 ```
 
 This repo uses [Stonecutter](https://stonecutter.kikugie.dev/): one shared `src/`, one Gradle subproject per Minecraft version (`versions/<mc>/`). Version-specific code goes in `//?` blocks; everything else is shared.

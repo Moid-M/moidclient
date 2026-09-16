@@ -22,8 +22,7 @@ public final class FullbrightManager {
             ));
     }
 
-    public static void onTick(ConfigManager config) {
-        try {
+    public static void onTick(ConfigManager config) {        try {
             if (config == null) return;
             var fb = config.getModule("fullbright");
             var mc = Minecraft.getInstance();
@@ -64,5 +63,44 @@ public final class FullbrightManager {
                 originalGamma = -1;
             }
         } catch (Exception ignored) {}
+    }
+
+    /** True while the gamma override is live (an out-of-range value is set). */
+    public static boolean isOverriding() {
+        return originalGamma >= 0;
+    }
+
+    /** Writes a raw gamma straight to the option field (bypasses validation). */
+    public static void writeGammaRaw(double value) {
+        try {
+            var mc = Minecraft.getInstance();
+            if (mc == null || mc.options == null) return;
+            var opt = mc.options.gamma();
+            Field f = null;
+            Class<?> c = opt.getClass();
+            while (c != null) {
+                try { f = c.getDeclaredField("value"); break; } catch (NoSuchFieldException e) { c = c.getSuperclass(); }
+            }
+            if (f == null) return;
+            f.setAccessible(true);
+            f.set(opt, value);
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * Called at the head of Options.save: park a legal value so vanilla can
+     * serialize (our boosted gamma fails validation and spams the log).
+     */
+    public static void onSaveStart() {
+        if (originalGamma < 0) return;
+        writeGammaRaw(Math.max(0.0, Math.min(1.0, originalGamma)));
+    }
+
+    /**
+     * Called at the tail of Options.save: nothing to do here on purpose.
+     * The next client tick re-applies the boost via onTick; if the game is
+     * closing there are no more ticks, which is exactly what we want.
+     */
+    public static void onSaveEnd() {
     }
 }

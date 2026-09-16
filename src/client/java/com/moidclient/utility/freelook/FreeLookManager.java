@@ -3,10 +3,11 @@ package com.moidclient.utility.freelook;
 import com.moidclient.config.ConfigManager;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
+import com.moidclient.utility.keybind.Keybinds;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -26,14 +27,12 @@ public final class FreeLookManager {
                 "utility", false, "eye", false,
                 ModuleOption.list(
                     ModuleOption.select("freelookMode", "Activation", java.util.List.of("hold", "toggle")),
-                    ModuleOption.keybind("freelookKey", "Key", GLFW.GLFW_KEY_LEFT_ALT),
+                    ModuleOption.keybind("freelookKey", "Key", com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_ALT),
                     ModuleOption.slider("freelookSensitivity", "Look sensitivity", 0.25, 3.0, 0.05)
                 ));
     }
 
     private static boolean active = false;
-    private static boolean toggled = false;
-    private static boolean wasDown = false;
     private static CameraType prevCamera = null;
     private static float yaw = 0;
     private static float pitch = 0;
@@ -47,21 +46,21 @@ public final class FreeLookManager {
     private static java.lang.reflect.Method guiScreenMethod = null;
     private static java.lang.reflect.Field guiScreenField = null;
 
-    public static void onTick(Minecraft mc, ConfigManager config) {
+    public static void onTick(Minecraft mc, ConfigManager config, KeyMapping freeLookKey) {
         try {
             ConfigManager.ModuleConfig mod = config != null ? config.getModule("freelook") : null;
             if (mod == null || !mod.enabled) {
-                toggled = false;
+                Keybinds.reset(freeLookKey);
                 disengage(mc);
                 return;
             }
             boolean toggleMode = "toggle".equals(mod.freelookMode);
-            boolean down = isKeyDown(mc, mod.freelookKey);
-            if (toggleMode && down && !wasDown) toggled = !toggled;
-            wasDown = down;
+            // Dashboard is the remote: push its binding into the vanilla
+            // mapping (visible + rebindable in Controls, persisted by vanilla).
+            Keybinds.syncBinding(mc, freeLookKey, mod.freelookKey);
             boolean shouldBe = false;
             if (mc != null && mc.player != null && currentScreen(mc) == null) {
-                shouldBe = toggleMode ? toggled : down;
+                shouldBe = Keybinds.isTriggered(freeLookKey, toggleMode);
                 sensitivity = mod.freelookSensitivity <= 0 ? 1.0f : (float) mod.freelookSensitivity;
             }
             if (shouldBe && !active) {
@@ -92,16 +91,6 @@ public final class FreeLookManager {
         prevCamera = null;
     }
 
-    /** Raw GLFW hold-state for a dashboard-bound key code (0 = unbound). */
-    private static boolean isKeyDown(Minecraft mc, int code) {
-        try {
-            if (mc == null || mc.getWindow() == null || code <= 0) return false;
-            return GLFW.glfwGetKey(mc.getWindow().handle(), code) == GLFW.GLFW_PRESS;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     /** Accumulates a mouse delta into the detached camera (vanilla 0.15 factor). */
     public static void onTurn(double x, double y) {
         try {
@@ -112,12 +101,17 @@ public final class FreeLookManager {
 
     private static float savedYaw = 0;
     private static float savedPitch = 0;
+    private static float savedOldYaw = 0;
+    private static float savedOldPitch = 0;
     private static boolean swapped = false;
 
     /**
      * Called at the head of Camera.update: lends the FreeLook angles to the
      * player so vanilla positions/rotates the camera (and its culling
-     * frustum) around the player. Restored by {@link #swapOut()}.
+     * frustum) around the player. Both current AND last-tick rotation are
+     * swapped: vanilla interpolates between them, and leaving the old one at
+     * the real rotation would make the camera trail and jitter. Restored by
+     * {@link #swapOut()}.
      */
     public static void swapIn() {
         if (!active || swapped) return;
@@ -126,8 +120,12 @@ public final class FreeLookManager {
             if (mc == null || mc.player == null) return;
             savedYaw = mc.player.getYRot();
             savedPitch = mc.player.getXRot();
+            savedOldYaw = mc.player.yRotO;
+            savedOldPitch = mc.player.xRotO;
             mc.player.setYRot(yaw);
             mc.player.setXRot(pitch);
+            mc.player.yRotO = yaw;
+            mc.player.xRotO = pitch;
             swapped = true;
         } catch (Exception ignored) {}
     }
@@ -141,6 +139,8 @@ public final class FreeLookManager {
             if (mc != null && mc.player != null) {
                 mc.player.setYRot(savedYaw);
                 mc.player.setXRot(savedPitch);
+                mc.player.yRotO = savedOldYaw;
+                mc.player.xRotO = savedOldPitch;
             }
         } catch (Exception ignored) {}
     }

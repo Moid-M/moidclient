@@ -23,6 +23,7 @@ const ICONS = {
   server:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>`,
   clock:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>`,
   mountain: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l6-11 4 6 2.5-3.5L21 19H3z"/></svg>`,
+  gauge: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4.5-5.5"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg>`,
   eye: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>`,
 };
 const FALLBACK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>`;
@@ -202,7 +203,8 @@ function handleLiveStats(data){
   if(data.previews) window.modulePreviews=data.previews;
   const el=document.querySelector('#liveStatsLabel');
   if(el) {
-    let txt='Ping: '+(livePing??'-')+' ms - FPS: '+(liveFps??'-');
+    let pingShown = livePing==null ? '-' : (livePing<0 ? '—' : livePing);
+    let txt='Ping: '+pingShown+' ms - FPS: '+(liveFps??'-');
     if(liveCpsLeft!=null || liveCpsRight!=null) txt+=' - CPS: '+(liveCpsLeft??0)+'|'+(liveCpsRight??0);
     el.textContent=txt;
   }
@@ -584,7 +586,7 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
 }
 // GLFW key codes <-> display names for the "keybind" option type.
 // Values are polled in-game via GLFW directly, so any keyboard key works.
-const GLFW_KEY_NAMES = {32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
+const GLFW_KEY_NAMES = {0:'Mouse Left',1:'Mouse Right',2:'Mouse Middle',32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
 for(let c=48;c<=57;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
 for(let c=65;c<=90;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
 function keyName(code){ return GLFW_KEY_NAMES[code] || ('Key ' + code); }
@@ -597,6 +599,9 @@ function updateKeybindTab(){
   const z=document.querySelector('#kbZoomKey'), f=document.querySelector('#kbFreelookKey');
   if(z) z.textContent=keyName(config.modules?.zoom?.zoomKey ?? 67);
   if(f) f.textContent=keyName(config.modules?.freelook?.freelookKey ?? 342);
+  const zc=document.querySelector('#kbZoomCard'), fc=document.querySelector('#kbFreelookCard');
+  if(zc) zc.style.display=config.modules?.zoom?.enabled ? '' : 'none';
+  if(fc) fc.style.display=config.modules?.freelook?.enabled ? '' : 'none';
 }
 function optionHtml(id, opt, data){  const key = opt.key, type = opt.type || 'text', label = opt.label || key;
   const hint = opt.hint ? ` <span class="text-[10px]">${opt.hint}</span>` : '';
@@ -1101,10 +1106,37 @@ function patchFromSync(newData){
   const needsFull = neededIds.some(id=> !existingIds.has(id)) || existingIds.size !== neededIds.length;
   if(needsFull) render(false);
 }
+let wsAttempts = 0, wasConnected = false, reconnectTimer = null;
+function showBanner(text){
+  const banner=$('#connBanner'), btxt=$('#connBannerText');
+  if(!banner) return;
+  if(btxt) btxt.textContent=text;
+  banner.classList.remove('hidden'); banner.classList.add('flex');
+}
+function hideBanner(){
+  const banner=$('#connBanner');
+  if(!banner) return;
+  banner.classList.add('hidden'); banner.classList.remove('flex');
+}
 function setConnection(state){
   const dot=$('#connDot'), txt=$('#connText');
-  if(state){ dot.className='w-2 h-2 rounded-full bg-emerald-500'; dot.style.boxShadow='0 0 8px #10B981'; txt.textContent='Connected to Minecraft'; txt.style.color='#10B981'; }
-  else{ dot.className='w-2 h-2 rounded-full bg-red-500 dot-pulse'; dot.style.boxShadow='none'; txt.textContent='Disconnected'; txt.style.color='var(--text-muted)'; }
+  document.body.classList.toggle('offline', !state);
+  if(state){
+    wasConnected=true; wsAttempts=0;
+    if(dot){ dot.className='w-2 h-2 rounded-full bg-emerald-500'; dot.style.boxShadow='0 0 8px #10B981'; }
+    if(txt){ txt.textContent='Connected to Minecraft'; txt.style.color='#10B981'; }
+    hideBanner();
+  }
+  else if(wasConnected){
+    if(dot){ dot.className='w-2 h-2 rounded-full bg-amber-500 dot-pulse'; dot.style.boxShadow='none'; }
+    if(txt){ txt.textContent='Reconnecting…'; txt.style.color='#F59E0B'; }
+    showBanner('Connection to Minecraft lost — reconnecting…');
+  }
+  else{
+    if(dot){ dot.className='w-2 h-2 rounded-full bg-red-500 dot-pulse'; dot.style.boxShadow='none'; }
+    if(txt){ txt.textContent='Disconnected'; txt.style.color='var(--text-muted)'; }
+    showBanner(wsAttempts<=1 ? 'Connecting to Minecraft…' : 'Reconnecting to Minecraft…');
+  }
 }
 function send(obj){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(obj)); }
 function handleSync(data){
@@ -1125,13 +1157,19 @@ function connect(){
   const proto=location.protocol==='https:'?'wss:':'ws:';
   const url=proto+'//'+location.host+'/ws';
   $('#wsUrl').textContent=url.replace('wss://','ws://');
-  ws=new WebSocket(url);
-  ws.onopen=()=>setConnection(true);
-  ws.onclose=()=>{ setConnection(false); setTimeout(connect,2000); };
-  ws.onerror=()=>setConnection(false);
-  ws.onmessage=ev=>{
+  wsAttempts++;
+  try{ if(ws && ws.readyState!==3) ws.close(); }catch(e){}
+  const sock=ws=new WebSocket(url);
+  sock.onopen=()=>{ if(ws!==sock) return; setConnection(true); };
+  sock.onclose=()=>{ if(ws!==sock) return; setConnection(false); if(reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer=setTimeout(connect,2000); };
+  sock.onerror=()=>{ if(ws!==sock) return; setConnection(false); };
+  sock.onmessage=ev=>{
     try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); }catch(e){ console.error(e); }
   };
+}
+function retryNow(){
+  if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
+  connect();
 }
 function switchTab(tab){
   const current=document.querySelector('.tab-panel:not(.hidden)');
@@ -1182,6 +1220,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     };
   }
   $('#accentBtn').onclick=()=>switchTab('theme');
+  const retryBtn=$('#connRetry'); if(retryBtn) retryBtn.onclick=(e)=>{ e.preventDefault(); retryNow(); };
   const ohInput=document.querySelector('#onboardHex');
   if(ohInput){
     ohInput.addEventListener('input', e=>{

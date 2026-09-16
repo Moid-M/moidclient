@@ -3,8 +3,9 @@ package com.moidclient.utility.zoom;
 import com.moidclient.config.ConfigManager;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
+import com.moidclient.utility.keybind.Keybinds;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +33,7 @@ public final class ZoomManager {
                 "utility", false, "target", false,
                 ModuleOption.list(
                     ModuleOption.select("zoomMode", "Activation", java.util.List.of("hold", "toggle")),
-                    ModuleOption.keybind("zoomKey", "Key", GLFW.GLFW_KEY_C),
+                    ModuleOption.keybind("zoomKey", "Key", com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_C),
                     ModuleOption.slider("zoomLevel", "Zoom level", 1.5, 10.0, 0.5),
                     ModuleOption.bool("zoomSmooth", "Smooth zoom-in"),
                     ModuleOption.bool("zoomSmoothOut", "Smooth zoom-out"),
@@ -50,8 +51,6 @@ public final class ZoomManager {
     private static boolean smoothIn = true;
     private static boolean smoothOut = true;
     private static double speed = 0.4;
-    private static boolean toggled = false;
-    private static boolean wasDown = false;
     private static boolean accessorWarned = false;
 
     /**
@@ -95,27 +94,23 @@ public final class ZoomManager {
         return 1.0 - Math.exp(-k * Math.max(0.0, dtSec));
     }
 
-    public static void onTick(Minecraft mc, ConfigManager config) {
+    public static void onTick(Minecraft mc, ConfigManager config, KeyMapping zoomKey) {
         try {
             ConfigManager.ModuleConfig mod = config != null ? config.getModule("zoom") : null;
-            boolean toggleMode = mod != null && "toggle".equals(mod.zoomMode);
-            boolean down = isKeyDown(mc, mod != null ? mod.zoomKey : 0);
-            if (toggleMode && down && !wasDown) toggled = !toggled;
-            wasDown = down;
             if (mc == null || mc.options == null || mod == null || !mod.enabled || mc.player == null) {
-                toggled = false;
+                Keybinds.reset(zoomKey);
                 snapInactive();
                 restoreSens(mc);
                 return;
             }
-            smoothIn = mod.zoomSmooth;
-            smoothOut = mod.zoomSmoothOut;
-            speed = mod.zoomSmoothSpeed <= 0 ? 0.4 : Math.max(0.05, Math.min(1.0, mod.zoomSmoothSpeed));
-            boolean zooming = toggleMode ? toggled : down;
+            boolean toggleMode = "toggle".equals(mod.zoomMode);
+            // Dashboard is the remote: push its binding into the vanilla
+            // mapping (visible + rebindable in Controls, persisted by vanilla).
+            Keybinds.syncBinding(mc, zoomKey, mod.zoomKey);
+            boolean zooming = Keybinds.isTriggered(zoomKey, toggleMode);
             if (!zooming) {
                 // Release: clear the hold flag FIRST (otherwise the frame
                 // loop keeps rendering zoomed forever), then ease out or snap.
-                if (held) LOGGER.info("[MoidClient/Zoom] released");
                 held = false;
                 if (!smoothOut || currentFov < 0) snapInactive();
                 else animOut = true;
@@ -139,10 +134,10 @@ public final class ZoomManager {
                 return;
             }
             if (baseFov < 0) {
-                LOGGER.info("[MoidClient/Zoom] engaged: baseFov={} level={} key={}", base, level, mod.zoomKey);
+                baseFov = base;
+                targetFov = Math.max(1.0, base / level);
+                LOGGER.debug("[MoidClient/Zoom] engaged: baseFov={} level={} key={}", base, level, mod.zoomKey);
             }
-            baseFov = base;
-            targetFov = Math.max(1.0, base / level);
             held = true;
             animOut = false;
 
@@ -180,16 +175,6 @@ public final class ZoomManager {
             LOGGER.debug("[MoidClient/Zoom] restore failed", e);
         }
         originalSens = -1;
-    }
-
-    /** Raw GLFW hold-state for a dashboard-bound key code (0 = unbound). */
-    private static boolean isKeyDown(Minecraft mc, int code) {
-        try {
-            if (mc == null || mc.getWindow() == null || code <= 0) return false;
-            return GLFW.glfwGetKey(mc.getWindow().handle(), code) == GLFW.GLFW_PRESS;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     /**

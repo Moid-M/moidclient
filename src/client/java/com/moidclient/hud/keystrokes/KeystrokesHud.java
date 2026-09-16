@@ -11,7 +11,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.DeltaTracker;
 import org.joml.Matrix3x2fStack;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Keystrokes HUD - Feather/Lunar-like.
@@ -90,17 +89,16 @@ public final class KeystrokesHud {
         if (HudCompat.isHudHidden(Minecraft.getInstance())) return;
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc.getWindow() == null) return;
-        long handle = mc.getWindow().handle();
-
-        boolean wDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_W) == GLFW.GLFW_PRESS;
-        boolean aDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_A) == GLFW.GLFW_PRESS;
-        boolean sDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_S) == GLFW.GLFW_PRESS;
-        boolean dDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_D) == GLFW.GLFW_PRESS;
-        boolean spaceDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS;
-        boolean shiftDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS || GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
-        boolean lmbDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-        boolean rmbDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+        if (mc == null) return;
+        boolean wDown = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_W);
+        boolean aDown = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_A);
+        boolean sDown = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_S);
+        boolean dDown = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_D);
+        boolean spaceDown = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_SPACE);
+        boolean shiftDown = com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_SHIFT)
+            || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_RIGHT_SHIFT);
+        boolean lmbDown = com.moidclient.utility.keybind.NativeKeys.isMouseDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_LEFT);
+        boolean rmbDown = com.moidclient.utility.keybind.NativeKeys.isMouseDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_RIGHT);
 
         boolean showMouse = mod.keystrokesShowMouse;
         boolean showSpace = mod.keystrokesShowSpace;

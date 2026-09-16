@@ -11,7 +11,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.DeltaTracker;
 import org.joml.Matrix3x2fStack;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -49,10 +48,11 @@ public final class CpsHud {
     public static void onTick() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.getWindow() == null) return;
-            long handle = mc.getWindow().handle();
-            boolean leftDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-            boolean rightDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_RIGHT) == GLFW.GLFW_PRESS;
+            if (mc == null) return;
+            boolean leftDown = com.moidclient.utility.keybind.NativeKeys.isMouseDown(mc,
+                com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_LEFT);
+            boolean rightDown = com.moidclient.utility.keybind.NativeKeys.isMouseDown(mc,
+                com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_RIGHT);
             long now = System.currentTimeMillis();
 
             if (leftDown && !wasLeftDown) {

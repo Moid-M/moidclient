@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" href="./icon.png"/>
 <link rel="stylesheet" href="./style.css"/>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col offline">
 <!-- Header -->
 <header class="h-[56px] flex items-center justify-between px-4 md:px-6 border-b" style="border-color:var(--border); background:var(--card)">
   <div class="flex items-center gap-3">
@@ -32,6 +32,13 @@
     <input id="importFile" type="file" accept=".json" class="hidden"/>
   </div>
 </header>
+
+<!-- Connection banner: hidden while connected, shows Connecting/Reconnecting otherwise -->
+<div id="connBanner" class="hidden items-center justify-center gap-2 px-4 py-2 text-xs border-b" style="border-color:var(--border);background:color-mix(in srgb, var(--accent) 8%, transparent);color:var(--text-muted)">
+  <span class="w-2 h-2 rounded-full dot-pulse" style="background:var(--accent)"></span>
+  <span id="connBannerText">Connecting to Minecraft…</span>
+  <button id="connRetry" class="underline font-medium" style="color:var(--accent)">Retry now</button>
+</div>
 
 <div class="flex flex-1 overflow-hidden">
   <!-- Sidebar -->
@@ -166,7 +173,7 @@
         </div>
         <div class="text-xs mt-3" style="color:var(--text-muted)">Change in Minecraft → Options → Controls → Moid Client</div>
       </div>
-      <div class="card p-4">
+      <div class="card p-4" id="kbZoomCard">
         <div class="flex items-center justify-between">
           <div>
             <div class="font-medium text-sm">Zoom</div>
@@ -176,7 +183,7 @@
         </div>
         <div class="text-xs mt-3" style="color:var(--text-muted)">Rebind by clicking the key in the Zoom module card</div>
       </div>
-      <div class="card p-4">
+      <div class="card p-4" id="kbFreelookCard">
         <div class="flex items-center justify-between">
           <div>
             <div class="font-medium text-sm">FreeLook</div>
