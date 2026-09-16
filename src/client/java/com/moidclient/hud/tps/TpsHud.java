@@ -113,6 +113,15 @@ public final class TpsHud {
         try {
             Minecraft mc = Minecraft.getInstance();
             if (mc == null || mc.level == null) return lastTps;
+            // Paused singleplayer advances no ticks while the clock runs -
+            // freeze the display instead of tanking to 0. Clearing keeps the
+            // post-resume reading clean (no dip from the paused span).
+            try {
+                if (mc.isPaused()) {
+                    SAMPLES.clear();
+                    return lastTps;
+                }
+            } catch (Exception ignored) {}
             long gameTime = mc.level.getLevelData().getGameTime();
             long now = System.currentTimeMillis();
             if (!SAMPLES.isEmpty() && gameTime < SAMPLES.peekLast()[0]) SAMPLES.clear();

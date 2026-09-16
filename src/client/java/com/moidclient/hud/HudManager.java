@@ -9,6 +9,10 @@ import com.moidclient.hud.fps.FpsHud;
 import com.moidclient.hud.keystrokes.KeystrokesHud;
 import com.moidclient.hud.ping.PingHud;
 import com.moidclient.hud.server.ServerHud;
+import com.moidclient.hud.session.SessionTimerHud;
+import com.moidclient.hud.potions.PotionEffectsHud;
+import com.moidclient.hud.armor.ArmorStatusHud;
+import com.moidclient.hud.tps.TpsHud;
 import net.minecraft.resources.Identifier;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 
@@ -25,12 +29,16 @@ public final class HudManager {
         config = cfg;
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "ping_hud"), (graphics, deltaTracker) -> PingHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "fps_hud"), (graphics, deltaTracker) -> FpsHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "tps_hud"), (graphics, deltaTracker) -> TpsHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "cps_hud"), (graphics, deltaTracker) -> CpsHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "keystrokes_hud"), (graphics, deltaTracker) -> KeystrokesHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "coords_hud"), (graphics, deltaTracker) -> CoordinatesHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "server_hud"), (graphics, deltaTracker) -> ServerHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "clock_hud"), (graphics, deltaTracker) -> ClockHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "biome_hud"), (graphics, deltaTracker) -> BiomeHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "session_hud"), (graphics, deltaTracker) -> SessionTimerHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "potions_hud"), (graphics, deltaTracker) -> PotionEffectsHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "armor_hud"), (graphics, deltaTracker) -> ArmorStatusHud.render(graphics, deltaTracker, config));
     }
 
     public static int getCurrentPing() { return PingHud.getCurrentPing(); }

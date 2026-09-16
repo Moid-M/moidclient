@@ -23,6 +23,9 @@ const ICONS = {
   server:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>`,
   clock:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>`,
   mountain: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l6-11 4 6 2.5-3.5L21 19H3z"/></svg>`,
+  timer: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5"/><path d="M9.5 2.5h5"/></svg>`,
+  flask: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v6L4.8 19a1.6 1.6 0 0 0 1.4 2.4h11.6a1.6 1.6 0 0 0 1.4-2.4L14 8V2"/><path d="M8 2h8"/><path d="M7.5 14h9"/></svg>`,
+  shield: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l7 2.8v6c0 4.3-2.9 7.3-7 8.7-4.1-1.4-7-4.4-7-8.7v-6z"/></svg>`,
   gauge: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4.5-5.5"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg>`,
   eye: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>`,
 };
@@ -229,21 +232,40 @@ function samplePreview(id){
     case 'server': return {text:'Server: play.example.net', kind:'text'};
     case 'clock': return {text:'09:41 | Day 3', kind:'text'};
     case 'biome': return {text:'Biome: Plains', kind:'text'};
+    case 'tpsCounter': return {text:'TPS: 20.0', kind:'text'};
+    case 'sessionTimer': return {text:'Session: 12:34', kind:'text'};
+    case 'potionEffects': return {text:'Speed II 3:24\nRegeneration 0:42', kind:'effects'};
+    case 'armorStatus': return {text:'No armor equipped', kind:'effects'};
     default: return null;
   }
 }
+// Canvas zoom (editor legibility): width % of the container, persisted.
+// All pill math measures the canvas live, so zoom stays correct.
+let canvasZoom = 100;
+try{ canvasZoom = Math.max(40, Math.min(150, parseInt(localStorage.getItem('cc_canvasZoom')||'100')||100)); }catch(e){}
+function applyCanvasZoom(){
+  document.querySelectorAll('.hudPreviewOuter,#hudPreviewOuter').forEach(o=>{
+    o.style.width = canvasZoom + '%';
+    o.style.margin = '0 auto';
+  });
+  const lbl=document.querySelector('#canvasZoomLabel');
+  if(lbl) lbl.textContent = canvasZoom + '%';
+  const inp=document.querySelector('#canvasZoom');
+  if(inp && document.activeElement!==inp) inp.value = canvasZoom;
+}
 function syncEditorItems(){
   try{
+  applyCanvasZoom();
   const outer=document.querySelector('#hudPreviewOuter');
   if(!outer) return;
-  outer.querySelectorAll('.hud-preview-item').forEach(e=>e.remove());
+  outer.querySelectorAll('.hud-preview-item,.hud-editor-hint').forEach(e=>e.remove());
   const enabledIds=MODULE_ORDER.filter(id=>{
     const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.editor;
   });
   const idsToShow = enabledIds;
   const outers=[outer, ...[...document.querySelectorAll('.hudPreviewOuter')].filter(o=>o!==outer)];
   for(const box of outers){
-  box.querySelectorAll('.hud-preview-item').forEach(e=>e.remove());
+  box.querySelectorAll('.hud-preview-item,.hud-editor-hint').forEach(e=>e.remove());
   const rect=box.getBoundingClientRect();
   const sx= rect.width / windowSize.scaledWidth;
   const sy= rect.height / windowSize.scaledHeight;
@@ -256,22 +278,28 @@ function syncEditorItems(){
     // matches the in-game box (transform scale applied below, same origin).
     const fixedDims = !!(pv && pv.w>0 && pv.h>0);
     const el=document.createElement('div');
-    el.className='hud-preview-item absolute select-none cursor-grab active:cursor-grabbing flex items-center justify-center text-xs font-medium whitespace-nowrap border';
+    el.className='hud-preview-item absolute select-none cursor-grab active:cursor-grabbing flex items-center justify-center font-medium whitespace-nowrap border';
     el.dataset.id=id;
+    // Match the in-game look: box dims follow the canvas mapping, while text
+    // follows the canvas zoom knob (legibility control).
+    const tfs=(canvasZoom || 100)/100;
+    el.style.fontSize=(12*tfs)+'px';
     const bgEnabled = !!mod.background;
     if(fixedDims){
-      el.style.width = pv.w + 'px';
-      el.style.height = pv.h + 'px';
+      el.style.width = (pv.w*sx) + 'px';
+      el.style.height = (pv.h*sy) + 'px';
       el.style.padding = '2px';
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
-      if(pv.kind==='keystrokes'){
+      if(pv.kind==='keystrokes'||pv.kind==='effects'){
         el.style.flexDirection = 'column';
-        el.style.gap = '2px';
-        el.style.fontSize = '9px';
+        el.style.gap = (2*tfs)+'px';
+        el.style.fontSize = (9*tfs)+'px';
         el.style.lineHeight = '1';
         el.style.whiteSpace = 'pre';
+      } else {
+        el.style.fontSize = (12*tfs)+'px';
       }
       if(bgEnabled){
         const bgCol = mod.backgroundColor || '#1A1B20';
@@ -302,7 +330,7 @@ function syncEditorItems(){
     el.style.transform=`scale(${scale})`; el.style.transformOrigin='top left';
     el.textContent=txt;
     el.style.opacity = mod.opacity ?? 1;
-    if(pv.kind==='keystrokes' && mod.keystrokesOutline===false){
+    if(pv && pv.kind==='keystrokes' && mod.keystrokesOutline===false){
       el.style.borderColor='transparent';
     }
     let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - 12));
@@ -314,7 +342,7 @@ function syncEditorItems(){
   });
   if(!idsToShow.length){
     const hint=document.createElement('div');
-    hint.className='absolute inset-0 flex items-center justify-center pointer-events-none';
+    hint.className='hud-editor-hint absolute inset-0 flex items-center justify-center pointer-events-none';
     hint.innerHTML='<span class="text-[11px] px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--card);color:var(--text-muted)">No HUD modules enabled — toggle one to position it here</span>';
     box.appendChild(hint);
   }
@@ -328,8 +356,22 @@ function syncEditorItems(){
   }catch(e){ console.error('[MoidClient] syncEditorItems error', e); try{ fetch('/api/log', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({level:'error', msg: 'syncEditorItems '+String(e), stack: e.stack})}); }catch(e2){} }
 }
 function syncEditorItem(){ try{ syncEditorItems(); }catch(e){ console.error('[MoidClient] syncEditorItem error', e); } }
-function setupEditorDrag(){
-  const outers=[...document.querySelectorAll('.hudPreviewOuter')];
+// Dot-grid cursor glow: the bright dot layer is masked to a circle around
+// the pointer (CSS vars per canvas, no per-dot work).
+document.addEventListener('pointermove', e=>{
+  const outer = e.target && e.target.closest ? e.target.closest('.hudPreviewOuter,#hudPreviewOuter') : null;
+  document.querySelectorAll('.hudPreviewOuter,#hudPreviewOuter').forEach(o=>{
+    if(o===outer){
+      const r=o.getBoundingClientRect();
+      o.style.setProperty('--mx', ((e.clientX-r.left)/r.width*100)+'%');
+      o.style.setProperty('--my', ((e.clientY-r.top)/r.height*100)+'%');
+    } else {
+      o.style.setProperty('--mx', '-50%');
+      o.style.setProperty('--my', '-50%');
+    }
+  });
+});
+function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPreviewOuter')];
   const main=document.querySelector('#hudPreviewOuter');
   if(main && !outers.includes(main)) outers.unshift(main);
   if(!outers.length) return;
@@ -773,9 +815,10 @@ function render(animate=false){
         </button>
         <div class="cat-grid ${edCollapsed?'collapsed':''} mb-4" data-cat-grid="_editor">
           <div class="card p-4 space-y-3">
-            <div class="hudPreviewOuter relative w-full rounded-xl border overflow-hidden select-none" style="border-color:var(--border);background:#0a0c0f; aspect-ratio: 16 / 9; touch-action:none;">
-              <div class="absolute inset-0 opacity-[0.07]" style="background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 24px 24px;"></div>
-              <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div class="hudPreviewOuter relative w-full rounded-xl border overflow-hidden select-none" style="border-color:var(--border);background:#0a0c0f; aspect-ratio: 16 / 9; touch-action:none;">
+            <div class="dotgrid"></div>
+            <div class="dotgrid glow"></div>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <span class="text-[10px] tracking-widest uppercase px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--card);color:var(--text-muted)">Minecraft Window</span>
               </div>
             </div>
@@ -1164,7 +1207,7 @@ function connect(){
   sock.onclose=()=>{ if(ws!==sock) return; setConnection(false); if(reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer=setTimeout(connect,2000); };
   sock.onerror=()=>{ if(ws!==sock) return; setConnection(false); };
   sock.onmessage=ev=>{
-    try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); }catch(e){ console.error(e); }
+    try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); if(msg.type==='LIVE_STATS') handleLiveStats(msg.data); }catch(e){ console.error(e); }
   };
 }
 function retryNow(){
@@ -1221,6 +1264,17 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   $('#accentBtn').onclick=()=>switchTab('theme');
   const retryBtn=$('#connRetry'); if(retryBtn) retryBtn.onclick=(e)=>{ e.preventDefault(); retryNow(); };
+  const zoomSlider=$('#canvasZoom');
+  if(zoomSlider){
+    zoomSlider.value=canvasZoom;
+    zoomSlider.addEventListener('input', ()=>{
+      canvasZoom=Math.max(40, Math.min(150, parseInt(zoomSlider.value)||100));
+      try{ localStorage.setItem('cc_canvasZoom', String(canvasZoom)); }catch(e){}
+      try{ updateSliderFill(zoomSlider); }catch(e){}
+      applyCanvasZoom();
+      setTimeout(syncEditorItems, 30);
+    });
+  }
   const ohInput=document.querySelector('#onboardHex');
   if(ohInput){
     ohInput.addEventListener('input', e=>{

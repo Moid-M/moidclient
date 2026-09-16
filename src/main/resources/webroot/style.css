@@ -387,3 +387,15 @@ body.offline .card{ pointer-events:none; opacity:.72; filter:saturate(.65); }
 body.offline .card{ cursor:not-allowed; }
 body.offline #accentBtn, body.offline #exportBtn, body.offline #importBtn{ pointer-events:none; opacity:.5; }
 
+
+/* HUD editor dot grid: dim dots everywhere, accent glow dots near the cursor */
+.hudPreviewOuter .dotgrid{ position:absolute; inset:0; pointer-events:none;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.09) 1.2px, transparent 1.4px);
+  background-size: 22px 22px; }
+.hudPreviewOuter .dotgrid.glow{
+  background-image: radial-gradient(circle, var(--accent) 1.4px, transparent 1.7px);
+  filter: drop-shadow(0 0 6px var(--accent));
+  -webkit-mask-image: radial-gradient(circle 130px at var(--mx,-50%) var(--my,-50%), black 30%, transparent 75%);
+  mask-image: radial-gradient(circle 130px at var(--mx,-50%) var(--my,-50%), black 30%, transparent 75%);
+}
+

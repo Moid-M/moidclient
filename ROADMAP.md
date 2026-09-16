@@ -16,6 +16,9 @@ Finished modules also live in the README table; this file tracks everything else
 | Server IP | HUD | `server` |
 | Clock | HUD | `clock` |
 | Biome | HUD | `biome` |
+| Session Timer | HUD | `sessionTimer` |
+| Potion Effects | HUD | `potionEffects` |
+| Armor Status | HUD | `armorStatus` |
 | Fullbright | Visuals | `fullbright` |
 | Block Outline | Visuals | `blockOutline` |
 | Perspective Skip | Utility | `perspectiveSkip` |
@@ -27,7 +30,7 @@ Finished modules also live in the README table; this file tracks everything else
 
 - [x] **Zoom** (`zoom`, Utility) — hold/toggle, dashboard-rebindable key, level slider, per-frame exponential smooth in/out (toggleable) + speed, lower sensitivity. Camera mixin overwrites computed FOV; user option untouched.
 - [x] **FreeLook** (`freelook`, Utility) — hold/toggle, dashboard-rebindable key, auto third-person-back on engage (restores after), sensitivity slider. The project's first mixin (camera detach + turn reroute).
-- [x] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`NativeKeys`: `isKeyDown(int)`, KEYBOARD enum, GLFW↔SDL code translation, MouseHandler buttons). First `//?` blocks in `src/`. In-game verification pending.
+- [x] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`NativeKeys`: `isKeyDown(int)`, KEYBOARD enum, GLFW↔SDL code translation, MouseHandler buttons). First `//?` blocks in `src/`. Verified in-game on 26.2 + 26.3 (26.1 smoke test still open).
 
 ## 🧱 Infra
 
@@ -39,8 +42,6 @@ Finished modules also live in the README table; this file tracks everything else
 |---|---|---|
 | ToggleSprint | Utility | #1 client staple, servers expect it |
 | ToggleSneak | Utility | pairs with ToggleSprint |
-| Armor Status | HUD | most-used HUD after FPS/CPS |
-| Potion Effects | HUD | same tier as armor |
 | Crosshair Customization | HUD | already planned in README |
 | Direction / Compass | HUD | cheap, loved by builders/PvPers |
 | Combo Counter | HUD | consecutive hits, PvP staple, needs attack hook |
@@ -56,6 +57,8 @@ Finished modules also live in the README table; this file tracks everything else
 - Memory usage (HUD, trivial via Runtime, debug flavor)
 - Reach Display (HUD, last-attack distance, needs attack hook like Combo)
 - Auto Reconnect (Utility, rejoin after disconnect, needs care on servers)
+- NoFog / NoRender (Visuals, fog toggle or render filters)
+- TNT Timer (HUD, primed-TNT fuse countdown display)
 
 ## 🚫 Out of scope
 

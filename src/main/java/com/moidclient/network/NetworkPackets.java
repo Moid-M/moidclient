@@ -151,8 +151,7 @@ public class NetworkPackets {
         }
     }
 
-    public void broadcastWindowSize(int width, int height, int scaledWidth, int scaledHeight, double guiScale) {
-        JsonObject data = new JsonObject();
+    public void broadcastWindowSize(int width, int height, int scaledWidth, int scaledHeight, double guiScale) {        JsonObject data = new JsonObject();
         data.addProperty("width", width);
         data.addProperty("height", height);
         data.addProperty("scaledWidth", scaledWidth);

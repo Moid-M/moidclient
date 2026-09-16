@@ -59,6 +59,21 @@ public class ConfigManager {
         public boolean cpsDynamicColor = false;
         // tps specific
         public boolean tpsDynamicColor = true; // false=white, true=health bands
+        // potion effects specific
+        public boolean potionColored = true;
+        public boolean potionShowAmplifier = true;
+        public boolean potionShowDuration = true;
+        public boolean potionShowAmbient = true;
+        public int potionMaxEffects = 5; // 1-10
+        // armor status specific
+        public boolean armorShowDurability = true;
+        public String armorDurabilityMode = "number"; // number or percent
+        public boolean armorDynamicColor = true; // false=fixed color, true=health gradient
+        public boolean armorLowWarn = true;
+        public String armorOrientation = "vertical"; // vertical or horizontal
+        public String armorLabelSide = "right"; // right, left, above or below
+        // session timer specific
+        public String sessionScope = "world"; // world, server or client
         // keystrokes specific - Feather/Lunar-like
         public boolean keystrokesShowMouse = true;
         public boolean keystrokesShowSpace = true;
@@ -99,10 +114,15 @@ public class ConfigManager {
         // zoom specific
         public String zoomMode = "hold"; // hold or toggle
         public int zoomKey = 67; // GLFW key code (67 = C)
-        public double zoomLevel = 4.0; // FOV divisor while zoom key held (1.5-10)
+        public double zoomLevel = 4.0; // divisor while zoomed (clamped to min/max)
+        public double zoomMinLevel = 1.5;
+        public double zoomMaxLevel = 10.0;
+        public boolean zoomScrollAdjust = true;
+        public double zoomScrollStep = 1.0; // per wheel notch (0.25-2)
         public boolean zoomSmooth = true;
         public boolean zoomSmoothOut = true;
         public double zoomSmoothSpeed = 0.4; // smoothing rate (0.05-1)
+        public boolean zoomCinematic = false; // hide crosshair + HUD while zoomed
         public boolean zoomLowerSensitivity = true;
         // freelook specific
         public String freelookMode = "hold"; // hold or toggle
@@ -118,6 +138,48 @@ public class ConfigManager {
             this.enabled = enabled;
             this.x = x;
             this.y = y;
+        }
+
+        /** Typed readers for {@link #custom} entries (plugin options). */
+        public boolean optBool(String key, boolean fallback) {
+            try {
+                JsonElement e = custom != null ? custom.get(key) : null;
+                if (e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isBoolean()) {
+                    return e.getAsBoolean();
+                }
+            } catch (Exception ignored) {}
+            return fallback;
+        }
+
+        public int optInt(String key, int fallback) {
+            try {
+                JsonElement e = custom != null ? custom.get(key) : null;
+                if (e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isNumber()) {
+                    return e.getAsInt();
+                }
+            } catch (Exception ignored) {}
+            return fallback;
+        }
+
+        public double optDouble(String key, double fallback) {
+            try {
+                JsonElement e = custom != null ? custom.get(key) : null;
+                if (e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isNumber()) {
+                    double v = e.getAsDouble();
+                    if (!Double.isNaN(v) && !Double.isInfinite(v)) return v;
+                }
+            } catch (Exception ignored) {}
+            return fallback;
+        }
+
+        public String optString(String key, String fallback) {
+            try {
+                JsonElement e = custom != null ? custom.get(key) : null;
+                if (e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isString()) {
+                    return e.getAsString();
+                }
+            } catch (Exception ignored) {}
+            return fallback;
         }
     }
 
@@ -227,6 +289,9 @@ public class ConfigManager {
         registerDefault("server", new ModuleConfig(false, 10, 130), overwrite);
         registerDefault("clock", new ModuleConfig(false, 10, 150), overwrite);
         registerDefault("biome", new ModuleConfig(false, 10, 170), overwrite);
+        registerDefault("sessionTimer", new ModuleConfig(false, 10, 190), overwrite);
+        registerDefault("potionEffects", new ModuleConfig(false, 10, 210), overwrite);
+        registerDefault("armorStatus", new ModuleConfig(false, 10, 230), overwrite);
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
@@ -282,6 +347,7 @@ public class ConfigManager {
                     case "server" -> c.format = "Server: {server}";
                     case "clock" -> c.format = "{time} | Day {day}";
                     case "biome" -> c.format = "Biome: {biome}";
+                    case "sessionTimer" -> c.format = "Session: {time}";
                     default -> c.format = "{value}";
                 }
             }
@@ -322,6 +388,30 @@ public class ConfigManager {
         }
         ModuleConfig tps = modules.get("tpsCounter");
         if (tps != null && tps.format == null) tps.format = "TPS: {tps}";
+        // potion list size 1-10
+        ModuleConfig potions = modules.get("potionEffects");
+        if (potions != null) {
+            if (potions.potionMaxEffects == 0) potions.potionMaxEffects = 5;
+            potions.potionMaxEffects = Math.max(1, Math.min(10, potions.potionMaxEffects));
+        }
+        // armor durability mode
+        ModuleConfig armor = modules.get("armorStatus");
+        if (armor != null && !"number".equals(armor.armorDurabilityMode) && !"percent".equals(armor.armorDurabilityMode)) {
+            armor.armorDurabilityMode = "number";
+        }
+        if (armor != null && !"vertical".equals(armor.armorOrientation) && !"horizontal".equals(armor.armorOrientation)) {
+            armor.armorOrientation = "vertical";
+        }
+        if (armor != null && !"right".equals(armor.armorLabelSide) && !"left".equals(armor.armorLabelSide)
+                && !"above".equals(armor.armorLabelSide) && !"below".equals(armor.armorLabelSide)) {
+            armor.armorLabelSide = "right";
+        }
+        // session scope
+        ModuleConfig session = modules.get("sessionTimer");
+        if (session != null && !"world".equals(session.sessionScope) && !"server".equals(session.sessionScope)
+                && !"client".equals(session.sessionScope)) {
+            session.sessionScope = "world";
+        }
         ModuleConfig cps = modules.get("cpsCounter");
         if (cps != null) {
             if (cps.format == null) cps.format = "CPS: {left} | {right}";
@@ -329,11 +419,18 @@ public class ConfigManager {
         }
         ModuleConfig fb = modules.get("fullbright");
         if (fb != null && fb.fullbrightGamma == 0) fb.fullbrightGamma = 12.0;
-        // zoom level 1.5-10
+        // zoom ranges (min/max bound both the slider and scroll)
         ModuleConfig zoom = modules.get("zoom");
         if (zoom != null) {
+            if (zoom.zoomMinLevel <= 0) zoom.zoomMinLevel = 1.5;
+            zoom.zoomMinLevel = Math.max(1.0, Math.min(10.0, zoom.zoomMinLevel));
+            if (zoom.zoomMaxLevel <= 0) zoom.zoomMaxLevel = 10.0;
+            zoom.zoomMaxLevel = Math.max(2.0, Math.min(12.0, zoom.zoomMaxLevel));
+            if (zoom.zoomMaxLevel < zoom.zoomMinLevel) zoom.zoomMaxLevel = zoom.zoomMinLevel;
             if (zoom.zoomLevel == 0) zoom.zoomLevel = 4.0;
-            zoom.zoomLevel = Math.max(1.5, Math.min(10.0, zoom.zoomLevel));
+            zoom.zoomLevel = Math.max(zoom.zoomMinLevel, Math.min(zoom.zoomMaxLevel, zoom.zoomLevel));
+            if (zoom.zoomScrollStep == 0) zoom.zoomScrollStep = 1.0;
+            zoom.zoomScrollStep = Math.max(0.25, Math.min(2.0, zoom.zoomScrollStep));
             if (!"hold".equals(zoom.zoomMode) && !"toggle".equals(zoom.zoomMode)) zoom.zoomMode = "hold";
             if (zoom.zoomSmoothSpeed == 0) zoom.zoomSmoothSpeed = 0.4;
             zoom.zoomSmoothSpeed = Math.max(0.05, Math.min(1.0, zoom.zoomSmoothSpeed));
@@ -441,9 +538,17 @@ public class ConfigManager {
         "hitboxEyeLine", "hitboxEyeLength", "hitboxPadding", "hitboxRenderRate",
         "hitboxWidth", "hitboxOpacity", "hitboxRange",
         "hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor",
-        "zoomMode", "zoomKey", "zoomLevel", "zoomSmooth", "zoomSmoothSpeed", "zoomLowerSensitivity",
-        "freelookMode", "freelookKey", "freelookSensitivity"
+        "zoomMode", "zoomKey", "zoomLevel", "zoomMinLevel", "zoomMaxLevel",
+        "zoomScrollAdjust", "zoomScrollStep", "zoomCinematic", "zoomSmooth", "zoomSmoothSpeed", "zoomLowerSensitivity",
+        "freelookMode", "freelookKey", "freelookSensitivity",
+        "potionColored", "potionShowAmplifier", "potionShowDuration", "potionShowAmbient",
+        "potionMaxEffects", "armorShowDurability", "armorDurabilityMode", "armorDynamicColor",
+        "armorLowWarn", "armorOrientation", "armorLabelSide", "sessionScope"
     );
+
+    public static boolean isKnownModuleKey(String key) {
+        return key != null && KNOWN_MODULE_KEYS.contains(key);
+    }
 
     public void updateModule(String id, JsonObject data) {
         ModuleConfig cfg = modules.get(id);
@@ -479,6 +584,30 @@ public class ConfigManager {
         }
         if (data.has("fpsDynamicColor")) cfg.fpsDynamicColor = data.get("fpsDynamicColor").getAsBoolean();
         if (data.has("tpsDynamicColor")) cfg.tpsDynamicColor = data.get("tpsDynamicColor").getAsBoolean();
+        if (data.has("potionColored")) cfg.potionColored = data.get("potionColored").getAsBoolean();
+        if (data.has("potionShowAmplifier")) cfg.potionShowAmplifier = data.get("potionShowAmplifier").getAsBoolean();
+        if (data.has("potionShowDuration")) cfg.potionShowDuration = data.get("potionShowDuration").getAsBoolean();
+        if (data.has("potionShowAmbient")) cfg.potionShowAmbient = data.get("potionShowAmbient").getAsBoolean();
+        if (data.has("potionMaxEffects")) cfg.potionMaxEffects = data.get("potionMaxEffects").getAsInt();
+        if (data.has("armorShowDurability")) cfg.armorShowDurability = data.get("armorShowDurability").getAsBoolean();
+        if (data.has("armorLowWarn")) cfg.armorLowWarn = data.get("armorLowWarn").getAsBoolean();
+        if (data.has("armorDurabilityMode") && !data.get("armorDurabilityMode").isJsonNull()) {
+            String m = data.get("armorDurabilityMode").getAsString();
+            if (m.equals("number") || m.equals("percent")) cfg.armorDurabilityMode = m;
+        }
+        if (data.has("armorDynamicColor")) cfg.armorDynamicColor = data.get("armorDynamicColor").getAsBoolean();
+        if (data.has("armorOrientation") && !data.get("armorOrientation").isJsonNull()) {
+            String m = data.get("armorOrientation").getAsString();
+            if (m.equals("vertical") || m.equals("horizontal")) cfg.armorOrientation = m;
+        }
+        if (data.has("armorLabelSide") && !data.get("armorLabelSide").isJsonNull()) {
+            String m = data.get("armorLabelSide").getAsString();
+            if (m.equals("right") || m.equals("left") || m.equals("above") || m.equals("below")) cfg.armorLabelSide = m;
+        }
+        if (data.has("sessionScope") && !data.get("sessionScope").isJsonNull()) {
+            String m = data.get("sessionScope").getAsString();
+            if (m.equals("world") || m.equals("server") || m.equals("client")) cfg.sessionScope = m;
+        }
         if (data.has("cpsMode") && !data.get("cpsMode").isJsonNull()) {
             String m = data.get("cpsMode").getAsString();
             if (m.equals("both") || m.equals("left") || m.equals("right")) cfg.cpsMode = m;
@@ -517,6 +646,11 @@ public class ConfigManager {
             if (m.equals("skipBack") || m.equals("skipFront")) cfg.perspectiveSkipMode = m;
         }
         if (data.has("zoomLevel")) cfg.zoomLevel = data.get("zoomLevel").getAsDouble();
+        if (data.has("zoomMinLevel")) cfg.zoomMinLevel = data.get("zoomMinLevel").getAsDouble();
+        if (data.has("zoomMaxLevel")) cfg.zoomMaxLevel = data.get("zoomMaxLevel").getAsDouble();
+        if (data.has("zoomScrollAdjust")) cfg.zoomScrollAdjust = data.get("zoomScrollAdjust").getAsBoolean();
+        if (data.has("zoomScrollStep")) cfg.zoomScrollStep = data.get("zoomScrollStep").getAsDouble();
+        if (data.has("zoomCinematic")) cfg.zoomCinematic = data.get("zoomCinematic").getAsBoolean();
         if (data.has("zoomSmooth")) cfg.zoomSmooth = data.get("zoomSmooth").getAsBoolean();
         if (data.has("zoomSmoothOut")) cfg.zoomSmoothOut = data.get("zoomSmoothOut").getAsBoolean();
         if (data.has("zoomSmoothSpeed")) cfg.zoomSmoothSpeed = data.get("zoomSmoothSpeed").getAsDouble();

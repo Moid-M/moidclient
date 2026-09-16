@@ -35,9 +35,14 @@ public final class ZoomManager {
                     ModuleOption.select("zoomMode", "Activation", java.util.List.of("hold", "toggle")),
                     ModuleOption.keybind("zoomKey", "Key", com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_C),
                     ModuleOption.slider("zoomLevel", "Zoom level", 1.5, 10.0, 0.5),
+                    ModuleOption.slider("zoomMinLevel", "Min level", 1.0, 10.0, 0.5),
+                    ModuleOption.slider("zoomMaxLevel", "Max level", 2.0, 12.0, 0.5),
+                    ModuleOption.bool("zoomScrollAdjust", "Scroll to adjust"),
+                    ModuleOption.slider("zoomScrollStep", "Scroll step", 0.25, 2.0, 0.25),
                     ModuleOption.bool("zoomSmooth", "Smooth zoom-in"),
                     ModuleOption.bool("zoomSmoothOut", "Smooth zoom-out"),
                     ModuleOption.slider("zoomSmoothSpeed", "Smooth speed", 0.05, 1.0, 0.05),
+                    ModuleOption.bool("zoomCinematic", "Cinematic (hide HUD)"),
                     ModuleOption.bool("zoomLowerSensitivity", "Lower sensitivity while zoomed")
                 ));
     }
@@ -52,6 +57,15 @@ public final class ZoomManager {
     private static boolean smoothOut = true;
     private static double speed = 0.4;
     private static boolean accessorWarned = false;
+    // Scroll/cinematic state, refreshed every tick (mixins read these).
+    private static boolean moduleEnabled = false;
+    private static boolean scrollAdjust = true;
+    private static double scrollStep = 1.0;
+    private static double minLevel = 1.5;
+    private static double maxLevel = 10.0;
+    private static boolean cinematic = false;
+    private static boolean levelDirty = false;
+    private static ConfigManager.ModuleConfig lastMod = null;
 
     /**
      * Advances and returns the FOV for this frame, called by the Camera mixin
@@ -88,6 +102,45 @@ public final class ZoomManager {
         return -1f;
     }
 
+    /** True while the cinematic overlay-hide should apply (checked by mixins/HUDs). */
+    public static boolean isCinematicActive() {
+        try {
+            return cinematic && moduleEnabled && currentFov > 0 && (held || animOut);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Mouse-wheel hook (called from the scroll mixin): while zoomed, each
+     * notch moves the level instead of the hotbar. Returns true when consumed.
+     * Positive offset (wheel up) zooms in.
+     */
+    public static boolean onScroll(double yOffset) {
+        try {
+            if (!moduleEnabled || !scrollAdjust || !held || lastMod == null) return false;
+            if (yOffset == 0) return false;
+            double next = lastMod.zoomLevel + (yOffset > 0 ? scrollStep : -scrollStep);
+            next = Math.max(minLevel, Math.min(maxLevel, next));
+            // Snap tiny values to one decimal so the dashboard shows clean numbers.
+            next = Math.round(next * 10.0) / 10.0;
+            if (next != lastMod.zoomLevel) {
+                lastMod.zoomLevel = next;
+                levelDirty = true;
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static double clampLevel(double level) {
+        double lo = minLevel <= 0 ? 1.5 : minLevel;
+        double hi = maxLevel <= 0 ? 10.0 : maxLevel;
+        if (hi < lo) hi = lo;
+        return Math.max(lo, Math.min(hi, level));
+    }
+
     /** Framerate-independent smoothing factor from the speed slider. */
     private static double frameFactor(double speed, float dtSec) {
         double k = Math.max(1.0, speed * 20.0);
@@ -98,11 +151,14 @@ public final class ZoomManager {
         try {
             ConfigManager.ModuleConfig mod = config != null ? config.getModule("zoom") : null;
             if (mc == null || mc.options == null || mod == null || !mod.enabled || mc.player == null) {
+                moduleEnabled = false;
                 Keybinds.reset(zoomKey);
                 snapInactive();
                 restoreSens(mc);
                 return;
             }
+            moduleEnabled = true;
+            lastMod = mod;
             boolean toggleMode = "toggle".equals(mod.zoomMode);
             // Dashboard is the remote: push its binding into the vanilla
             // mapping (visible + rebindable in Controls, persisted by vanilla).
@@ -115,10 +171,19 @@ public final class ZoomManager {
                 if (!smoothOut || currentFov < 0) snapInactive();
                 else animOut = true;
                 restoreSens(mc);
+                if (levelDirty && config != null) {
+                    levelDirty = false;
+                    try { config.save(); } catch (Exception ignored) {}
+                }
                 return;
             }
 
-            double level = mod.zoomLevel <= 0 ? 4.0 : Math.max(1.5, Math.min(10.0, mod.zoomLevel));
+            double level = clampLevel(mod.zoomLevel <= 0 ? 4.0 : mod.zoomLevel);
+            scrollAdjust = mod.zoomScrollAdjust;
+            scrollStep = mod.zoomScrollStep <= 0 ? 1.0 : Math.max(0.25, Math.min(2.0, mod.zoomScrollStep));
+            minLevel = mod.zoomMinLevel;
+            maxLevel = mod.zoomMaxLevel;
+            cinematic = mod.zoomCinematic;
             OptionAccess fov = OptionAccess.find(mc.options, "fov", "getFov");
             if (fov == null) {
                 if (!accessorWarned) {
@@ -135,9 +200,11 @@ public final class ZoomManager {
             }
             if (baseFov < 0) {
                 baseFov = base;
-                targetFov = Math.max(1.0, base / level);
                 LOGGER.debug("[MoidClient/Zoom] engaged: baseFov={} level={} key={}", base, level, mod.zoomKey);
             }
+            // Recomputed every tick (not just on engage) so scroll-adjust
+            // takes effect while held.
+            targetFov = Math.max(1.0, base / level);
             held = true;
             animOut = false;
 

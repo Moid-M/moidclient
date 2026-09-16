@@ -5,6 +5,8 @@
   "client": [
     "CameraMixin",
     "EntityMixin",
+    "MouseScrollMixin",
+    "CrosshairMixin",
     "OptionsMixin"
   ],
   "injectors": {

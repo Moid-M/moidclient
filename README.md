@@ -50,10 +50,13 @@ drift into the prose sections above.
 | Server IP | HUD | Shows the current server address | ✅ |
 | Clock | HUD | Shows real time and current world day | ✅ |
 | Biome | HUD | Shows the current biome name | ✅ |
+| Session Timer | HUD | Tracks playtime (world, server or client scope) | ✅ |
+| Potion Effects | HUD | Shows active effects with timers | ✅ |
+| Armor Status | HUD | Shows equipped armor with durability | ✅ |
 | Fullbright | Visuals | Removes darkness / sets max gamma (1-15) | ✅ |
 | Block Outline | Visuals | Custom color/opacity outline on the targeted block | ✅ |
 | Perspective Skip | Utility | F5 skips a third-person view — back or front, selectable | ✅ |
-| Zoom | Utility | FOV zoom, hold/toggle, rebindable in dashboard | ✅ |
+| Zoom | Utility | FOV zoom with scroll-adjust, cinematic mode, hold/toggle, rebindable | ✅ |
 | FreeLook | Utility | 360° camera + auto third-person, hold/toggle, rebindable | ✅ |
 | Custom Hitboxes | Visuals | Always-on entity hitboxes with per-group colors, eye lines | ✅ |
 
@@ -100,7 +103,7 @@ This repo uses [Stonecutter](https://stonecutter.kikugie.dev/): one shared `src/
 
 ## Contributing
 
-Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer, a `preview()` for the HUD editor, `ConfigManager.ModuleConfig` fields, and one `ModuleRegistry.register()` line — the dashboard cards, `/api/modules`, and editor previews pick it up automatically, no frontend changes needed (new option types like `keybind` are the only exception).
+Issues and pull requests are welcome. New modules are self-describing: add `definition()` to the module class (see `com.moidclient.module.ModuleDef` / existing `*Hud` / `visuals/*` classes) plus its renderer, a `preview()` for the HUD editor, and one `ModuleRegistry.register()` line — and declare option defaults right in the definition (`bool(key, label, def)`, `slider(..., def)`, etc.): they land in config automatically with zero `ConfigManager` edits (read them back with `ModuleConfig.optBool/optInt/optDouble/optString`). For HUDs also add one `HudElementRegistry.addLast(...)` line in `HudManager.init()` (without it the module shows in the dashboard but never draws) — the dashboard cards, `/api/modules`, and editor previews pick it up automatically, no frontend changes needed (new option types like `keybind` are the only exception).
 
 Stonecutter note: run `./gradlew "Reset active project"` (back to the VCS version, 26.1) before committing, so no preprocessor noise lands in git.
 

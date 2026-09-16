@@ -48,8 +48,9 @@ public class ClientMod implements ClientModInitializer {
         INSTANCE = this;
         LOGGER.info("[MoidClient] Initializing ultra-lightweight utility client...");
 
-        // 1) Config
+        // 1) Config + schema defaults declared in module definitions
         configManager = new ConfigManager();
+        try { ModuleRegistry.applyOptionDefaults(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to apply option defaults", e); }
         networkPackets = new NetworkPackets(configManager);
         // 1b) HUD (ping display etc) - register before server
         try { HudManager.init(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init HUD", e); }

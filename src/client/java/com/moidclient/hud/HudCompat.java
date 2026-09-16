@@ -23,6 +23,10 @@ public final class HudCompat {
 
     public static boolean isHudHidden(Minecraft mc) {
         try {
+            // Cinematic zoom hides every overlay (checked first: cheapest gate).
+            try {
+                if (com.moidclient.utility.zoom.ZoomManager.isCinematicActive()) return true;
+            } catch (Exception ignored) {}
             if (mc == null) return false;
             if (mode == 0) detect(mc);
             if (mode == 1) {
