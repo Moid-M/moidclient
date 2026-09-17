@@ -15,7 +15,9 @@ import com.moidclient.hud.session.SessionTimerHud;
 import com.moidclient.hud.potions.PotionEffectsHud;
 import com.moidclient.hud.armor.ArmorStatusHud;
 import com.moidclient.hud.tps.TpsHud;
+import com.moidclient.utility.autohide.AutohideManager;
 import com.moidclient.utility.freelook.FreeLookManager;
+import com.moidclient.utility.telemetryblock.TelemetryBlockManager;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.utility.togglesneak.ToggleSneakManager;
 import com.moidclient.utility.togglesprint.ToggleSprintManager;
@@ -68,6 +70,8 @@ public final class ModuleRegistry {
         register(ToggleSprintManager::definition, null);
         register(ToggleSneakManager::definition, null);
         register(ItemPhysicsManager::definition, null);
+        register(AutohideManager::definition, null);
+        register(TelemetryBlockManager::definition, null);
     }
 
     /**

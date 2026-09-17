@@ -136,6 +136,7 @@ public class ClientMod implements ClientModInitializer {
             try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager, freeLookKey); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }
             try { com.moidclient.utility.togglesprint.ToggleSprintManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] ToggleSprint tick failed", e); }
             try { com.moidclient.utility.togglesneak.ToggleSneakManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] ToggleSneak tick failed", e); }
+            try { com.moidclient.utility.autohide.AutohideManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Autohide tick failed", e); }
             // reverse keybind sync (Controls -> dashboard), throttled 1s:
             // adopt live bindings changed in-game so the dashboard follows.
             if (++keySyncTick % 20 == 0) {

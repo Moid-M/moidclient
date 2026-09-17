@@ -9,7 +9,9 @@
     "CrosshairMixin",
     "OptionsMixin",
     "ItemEntityRendererMixin",
-    "ItemEntityRenderStateMixin"
+    "ItemEntityRenderStateMixin",
+    "AutohideMixin",
+    "TelemetryMixin"
   ],
   "injectors": {
     "defaultRequire": 1

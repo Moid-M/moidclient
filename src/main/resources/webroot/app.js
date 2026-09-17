@@ -66,6 +66,7 @@ function defsNoticeHtml(){
 let ws=null, accent='#9F9F9F', config={accentColor:accent, modules:{}};
 let focusedId=null, hasInitialRendered=false, isDraggingSlider=false;
 let isDraggingHud=false;
+let editorDragId=null;
 let lastBgToggle=0;
 let searchQuery="";
 let windowSize={scaledWidth:640, scaledHeight:360, width:1920, height:1080, guiScale:3};
@@ -255,6 +256,23 @@ function syncEditorItems(){
   applyCanvasZoom();
   const outer=document.querySelector('#hudPreviewOuter');
   if(!outer) return;
+  // While dragging, never rebuild pills (that destroys the node under the
+  // pointer and the drag stutters): just glide the dragged pill, live values.
+  if(isDraggingHud && editorDragId){
+    const dm=config.modules[editorDragId];
+    if(dm){
+      document.querySelectorAll(`.hud-preview-item[data-id="${editorDragId}"]`).forEach(el=>{
+        const box=el.closest('.hudPreviewOuter,#hudPreviewOuter')||outer;
+        const brect=box.getBoundingClientRect();
+        const bsx=brect.width/((windowSize&&windowSize.scaledWidth)||640);
+        const bsy=brect.height/((windowSize&&windowSize.scaledHeight)||360);
+        const sw=(windowSize&&windowSize.scaledWidth)||640, sh=(windowSize&&windowSize.scaledHeight)||360;
+        el.style.left=(Math.max(0,Math.min(dm.x,sw-EDITOR_EDGE_PAD))*bsx)+'px';
+        el.style.top=(Math.max(0,Math.min(dm.y,sh-EDITOR_EDGE_PAD))*bsy)+'px';
+      });
+    }
+    return;
+  }
   outer.querySelectorAll('.hud-preview-item,.hud-editor-hint').forEach(e=>e.remove());
   const enabledIds=MODULE_ORDER.filter(id=>{
     const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.editor;
@@ -378,7 +396,7 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
   outer.addEventListener('pointerdown', e=>{
     const item=e.target.closest('.hud-preview-item');
     if(!item) return;
-    dragId=item.dataset.id; dragEl=item; editorSelectedId=dragId;
+    dragId=item.dataset.id; dragEl=item; editorSelectedId=dragId; editorDragId=dragId;
     dragging=true; isDraggingHud=true; item.setPointerCapture(e.pointerId); item.style.cursor='grabbing';
     startX=e.clientX; startY=e.clientY;
     const mod0=config.modules[dragId];
@@ -418,9 +436,11 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     const ey=document.querySelector('#editorY'); if(ey && document.activeElement!==ey) ey.value=ny;
     const posEl=document.querySelector('#editorPos'); if(posEl) posEl.textContent=`${nx}, ${ny} - ${(mod.scale||1).toFixed(2)}x`;
     const now=Date.now();
-    if(now-lastDragSend>120){
+    // Drag previews skip disk + broadcast (release saves and converges);
+    // ~60Hz keeps the in-game HUD gliding instead of stepping.
+    if(now-lastDragSend>16){
       lastDragSend=now;
-      send({type:'UPDATE_MODULE', id:dragId, data:{x:nx, y:ny}});
+      send({type:'PREVIEW_MODULE', id:dragId, data:{x:nx, y:ny}});
     }
     e.preventDefault();
   });
@@ -430,7 +450,7 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     if(dragEl) dragEl.style.cursor='grab';
     const doneId=dragId;
     const mod=doneId ? config.modules[doneId] : null;
-    dragEl=null; dragId=null;
+    dragEl=null; dragId=null; editorDragId=null;
     if(doneId && mod) send({type:'UPDATE_MODULE', id:doneId, data:{x:mod.x, y:mod.y}});
     syncEditorItems();
   }
@@ -1089,6 +1109,8 @@ function patchFromSync(newData){
       if(document.activeElement===inp) return;
       if(isDraggingSlider && inp.type==='range' && inp.matches(':active')) return;
       const f=inp.getAttribute('data-field');
+      // While dragging, the drag handler owns x/y inputs (server state lags).
+      if(isDraggingHud && (f==='x'||f==='y')) return;
       if(f==='x') inp.value=data.x;
       else if(f==='y') inp.value=data.y;
       else if(inp.type==='range'){ if(data[f]!==undefined && data[f]!==null){ inp.value=data[f]; updateSliderFill(inp); } }

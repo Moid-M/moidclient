@@ -9,6 +9,7 @@ A lightweight, open-source Fabric client with a clickgui that runs entirely in y
 - **No launcher.** Just a `.jar` — drop it in your `mods` folder like any other Fabric mod.
 - **No account login.** Nothing to sign in to, nothing tied to your Microsoft/Mojang account beyond what Minecraft itself needs.
 - **No telemetry.** The client doesn't phone home. Don't take my word for it — the code is public, check for yourself.
+- **Blocks Mojang telemetry.** On by default: forces vanilla's telemetry off-switch, so analytics events never leave your PC. Logins, skins, and servers work untouched. (Toggling it mid-session settles fully on world rejoin.)
 - **Open source (GPLv3).** Fork it, modify it, learn from it — just keep it open if you redistribute it.
 - **Browser-based clickgui.** The control panel is a local webpage (`localhost` only), not an in-game overlay — full CSS theming, no fighting Java rendering for a UI.
 
@@ -62,6 +63,8 @@ drift into the prose sections above.
 | ToggleSprint | Utility | Uses the vanilla toggle-sprint setting while enabled | ✅ |
 | ToggleSneak | Utility | Uses the vanilla toggle-sneak setting while enabled | ✅ |
 | Item Physics | Visuals | Dropped items spin in air, lie flat on ground | ✅ |
+| Autohide HUD | HUD | Hides the hotbar cluster when idle (slide/shrink/pop, speed, per-direction) | ✅ |
+| Telemetry Block | Utility | Blocks Mojang telemetry events, on by default | ✅ |
 
 **Planned / in progress:**
 

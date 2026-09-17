@@ -296,6 +296,8 @@ public class ConfigManager {
         registerDefault("zoom", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("freelook", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
+        // telemetryBlock ships ON: never overwrite an existing choice.
+        registerDefault("telemetryBlock", new ModuleConfig(true, 0, 0), false);
         // removed: testModule, fpsBoost (not implemented)
     }
 
@@ -316,6 +318,10 @@ public class ConfigManager {
         for (var e : modules.entrySet()) {
             ModuleConfig c = e.getValue();
             if (c.custom == null) c.custom = new LinkedHashMap<>();
+            // Drop stale known-keys from custom (older versions leaked some
+            // in): explicit fields are the source of truth, and toJson
+            // flattening must not let the stale copy shadow them.
+            c.custom.keySet().removeIf(ConfigManager::isKnownModuleKey);
             if (c.backgroundColor == null) c.backgroundColor = "#1A1B20";
             if (c.backgroundOpacity == 0) {
                 // migrate from old opacity*0.85 or default 0.85
@@ -523,7 +529,21 @@ public class ConfigManager {
         out.addProperty("themeTextColor", themeTextColor);
         JsonObject mods = new JsonObject();
         for (Map.Entry<String, ModuleConfig> e : modules.entrySet()) {
-            mods.add(e.getKey(), GSON.toJsonTree(e.getValue()));
+            JsonObject tree = GSON.toJsonTree(e.getValue()).getAsJsonObject();
+            // Flatten custom so the dashboard reads/writes option keys
+            // directly (it treats module JSON as flat). Explicit fields win:
+            // stale duplicates from older versions must not shadow them.
+            JsonObject custom = null;
+            if (tree.has("custom") && tree.get("custom").isJsonObject()) {
+                custom = tree.getAsJsonObject("custom");
+            }
+            tree.remove("custom");
+            if (custom != null) {
+                for (var ce : custom.entrySet()) {
+                    if (!tree.has(ce.getKey())) tree.add(ce.getKey(), ce.getValue());
+                }
+            }
+            mods.add(e.getKey(), tree);
         }
         out.add("modules", mods);
         return out;
@@ -591,6 +611,16 @@ public class ConfigManager {
     }
 
     public synchronized void updateModule(String id, JsonObject data) {
+        updateModule(id, data, true);
+    }
+
+    /**
+     * Applies a dashboard patch. Preview writes update memory only (no disk,
+     * no broadcast - the game reads live memory, the sender already shows
+     * its own values), so high-frequency drags stay smooth without hammering
+     * storage or the dashboard DOM; the release always sends a saving update.
+     */
+    public synchronized void updateModule(String id, JsonObject data, boolean save) {
         ModuleConfig cfg = modules.get(id);
         if (cfg == null) {
             cfg = new ModuleConfig();
@@ -745,7 +775,7 @@ public class ConfigManager {
             }
             cfg.custom.put(key, value.deepCopy());
         }
-        save();
+        if (save) save();
     }
 
     public synchronized void importFromJson(JsonObject json) {
@@ -764,8 +794,23 @@ public class ConfigManager {
             JsonObject mods = json.getAsJsonObject("modules");
             modules.clear();
             for (var entry : mods.entrySet()) {
-                ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
-                modules.put(entry.getKey(), cfg);
+                try {
+                    if (!entry.getValue().isJsonObject()) continue;
+                    JsonObject obj = entry.getValue().getAsJsonObject();
+                    ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
+                    if (cfg == null) cfg = new ModuleConfig();
+                    if (cfg.custom == null) cfg.custom = new LinkedHashMap<>();
+                    // Pull flattened custom keys back in (toJson flattens).
+                    for (var f : obj.entrySet()) {
+                        String key = f.getKey();
+                        if ("custom".equals(key) || isKnownModuleKey(key)) continue;
+                        var value = f.getValue();
+                        if (value != null && value.isJsonPrimitive()) {
+                            cfg.custom.put(key, value.deepCopy());
+                        }
+                    }
+                    modules.put(entry.getKey(), cfg);
+                } catch (Exception ignored) {}
             }
         }
         ensureDefaults(false);

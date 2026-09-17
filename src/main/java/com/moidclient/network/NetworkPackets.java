@@ -67,13 +67,14 @@ public class NetworkPackets {
                 LOGGER.warn("[MoidClient] WS {} too large ({}), dropped", type, message.length());
                 return;
             }
-            if (!"PING".equals(type) && !checkRate(ctx)) {
+            if (!"PING".equals(type) && !checkRate(ctx, "PREVIEW_MODULE".equals(type) ? 60 : RATE_MAX_PER_SEC)) {
                 LOGGER.warn("[MoidClient] WS flood from {}, patch dropped", ctx.sessionId());
                 return;
             }
 
             switch (type) {
-                case "UPDATE_MODULE" -> handleUpdateModule(json);
+                case "UPDATE_MODULE" -> handleUpdateModule(json, true, true);
+                case "PREVIEW_MODULE" -> handleUpdateModule(json, false, false);
                 case "UPDATE_ACCENT_COLOR" -> handleUpdateAccent(json);
                 case "UPDATE_TEXT_COLOR", "UPDATE_THEME_TEXT_COLOR" -> handleUpdateTextColor(json);
                 case "EXPORT_CONFIG" -> handleExport(ctx);
@@ -87,7 +88,7 @@ public class NetworkPackets {
     }
 
     /** Fixed-window per-session throttle; bursty dashboards fit, tight loops don't. */
-    private boolean checkRate(WsContext ctx) {
+    private boolean checkRate(WsContext ctx, int max) {
         long now = System.currentTimeMillis();
         long[] slot = rateWindows.computeIfAbsent(ctx.sessionId(), k -> new long[]{now, 0});
         synchronized (slot) {
@@ -95,18 +96,22 @@ public class NetworkPackets {
                 slot[0] = now;
                 slot[1] = 0;
             }
-            if (slot[1] >= RATE_MAX_PER_SEC) return false;
+            if (slot[1] >= max) return false;
             slot[1]++;
             return true;
         }
     }
 
-    private void handleUpdateModule(JsonObject json) {
+    // Previews skip the broadcast too: the game reads live memory and the
+    // sending dashboard mutated its own copy optimistically, so there is no
+    // viewer to update - and no 60Hz DOM reconciliation storm. The release
+    // sends a normal saving update that converges every view.
+    private void handleUpdateModule(JsonObject json, boolean save, boolean broadcast) {
         if (!json.has("id") || !json.has("data")) return;
         String id = json.get("id").getAsString();
         JsonObject data = json.getAsJsonObject("data");
-        config.updateModule(id, data);
-        broadcastSync();
+        config.updateModule(id, data, save);
+        if (broadcast) broadcastSync();
     }
 
     private void handleUpdateAccent(JsonObject json) {

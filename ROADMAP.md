@@ -28,9 +28,12 @@ Finished modules also live in the README table; this file tracks everything else
 | ToggleSprint | Utility | `toggleSprint` |
 | ToggleSneak | Utility | `toggleSneak` |
 | Item Physics | Visuals | `itemPhysics` |
+| Autohide HUD | HUD | `autohideHud` |
+| Telemetry Block | Utility | `telemetryBlock` |
 
 ## 🔨 In progress (this batch)
 
+- [x] **1.3.0 batch** — ToggleSprint/ToggleSneak (vanilla-toggle drivers), Item Physics (tumble + flat rest), Autohide HUD (slide/shrink/pop per direction), Telemetry Block (default-on Mojang telemetry block; a mid-session off→on dance settles on world rejoin), TPS MSPT fix, WS/config validation + clamping + rate limiting.
 - [x] **Zoom** (`zoom`, Utility) — hold/toggle, dashboard-rebindable key, level slider, per-frame exponential smooth in/out (toggleable) + speed, lower sensitivity. Camera mixin overwrites computed FOV; user option untouched.
 - [x] **FreeLook** (`freelook`, Utility) — hold/toggle, dashboard-rebindable key, auto third-person-back on engage (restores after), sensitivity slider. The project's first mixin (camera detach + turn reroute).
 - [x] **26.3 port** — Stonecutter `versions/26.3` node + SDL input layer (`NativeKeys`: `isKeyDown(int)`, KEYBOARD enum, GLFW↔SDL code translation, MouseHandler buttons). First `//?` blocks in `src/`. Verified in-game on 26.2 + 26.3 (26.1 smoke test still open).
@@ -46,8 +49,8 @@ Finished modules also live in the README table; this file tracks everything else
 | Crosshair Customization | HUD | already planned in README |
 | Direction / Compass | HUD | cheap, loved by builders/PvPers |
 | Combo Counter | HUD | consecutive hits, PvP staple, needs attack hook |
-| Autohide Hotbar/HUD | HUD | fade out when idle, Lunar-style QoL |
 | Inventory HUD | HUD | see inventory contents without opening it |
+| Autohide Hotbar/HUD | HUD | fade out when idle, Lunar-style QoL |
 | Mousestrokes | HUD | drag-direction indicator, two circles |
 
 ## 💡 Parked ideas (later)
