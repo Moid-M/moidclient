@@ -48,13 +48,19 @@ public class NetworkPackets {
 
     public void onMessage(WsContext ctx, String message) {
         if (message == null) return;
-        if (message.length() > 100_000) {
+        if (message.length() > 512_000) {
             LOGGER.warn("[MoidClient] WS message too large ({}), dropped", message.length());
             return;
         }
         try {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
             String type = json.has("type") ? json.get("type").getAsString() : "";
+            // Only IMPORT_CONFIG may be large (full config); everything else
+            // is a small patch and anything bigger is a flood, not a slider.
+            if (!"IMPORT_CONFIG".equals(type) && message.length() > 100_000) {
+                LOGGER.warn("[MoidClient] WS {} too large ({}), dropped", type, message.length());
+                return;
+            }
 
             switch (type) {
                 case "UPDATE_MODULE" -> handleUpdateModule(json);
@@ -66,8 +72,7 @@ public class NetworkPackets {
                 default -> LOGGER.warn("[MoidClient] Unknown WS type: {}", type);
             }
         } catch (Exception e) {
-            String preview = message.length() > 300 ? message.substring(0, 300) + "..." : message;
-            LOGGER.error("[MoidClient] Failed to handle WS message: {}", preview, e);
+            LOGGER.error("[MoidClient] Failed to handle WS message ({} chars)", message.length(), e);
         }
     }
 
@@ -111,11 +116,6 @@ public class NetworkPackets {
     private void handleImport(JsonObject json) {
         if (!json.has("data")) return;
         JsonObject data = json.getAsJsonObject("data");
-        // basic size guard: reject >500KB import
-        if (data.toString().length() > 512_000) {
-            LOGGER.warn("[MoidClient] IMPORT_CONFIG too large, rejected");
-            return;
-        }
         config.importFromJson(data);
         broadcastSync();
     }
@@ -192,12 +192,7 @@ public class NetworkPackets {
             sendSafe(wsCtx, msg);
         }
     }
-    // legacy overload
-    public void broadcastLiveStats(int ping, int fps) {
-        broadcastLiveStats(ping, fps, 0, 0, false, false, false, false, false, false, false, false, null);
-    }
-
     public Set<WsContext> getSessions() {
-        return sessions;
+        return java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(sessions));
     }
 }

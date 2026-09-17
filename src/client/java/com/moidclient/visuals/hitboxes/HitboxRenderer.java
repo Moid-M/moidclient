@@ -188,7 +188,7 @@ public final class HitboxRenderer {
             poseStack.pushPose();
             try {
                 poseStack.translate(ox, oy, oz);
-                context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(), (pose, consumer) ->
+                context.submitNodeCollector().submitCustomGeometry(poseStack, a >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent(), (pose, consumer) ->
                     boxEdges(pose, consumer, w, h, d, r, g, b, a, width)
                 );
             } finally {
@@ -218,7 +218,7 @@ public final class HitboxRenderer {
             poseStack.pushPose();
             try {
                 poseStack.translate(-cam.x, -cam.y, -cam.z);
-                context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(), (pose, consumer) ->
+                context.submitNodeCollector().submitCustomGeometry(poseStack, a >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent(), (pose, consumer) ->
                     edge(pose, consumer,
                             (float) x1, (float) y1, (float) z1,
                             (float) x2, (float) y2, (float) z2,

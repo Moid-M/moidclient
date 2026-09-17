@@ -43,6 +43,7 @@ public final class HudManager {
 
     public static int getCurrentPing() { return PingHud.getCurrentPing(); }
     public static int getCurrentFps() { return FpsHud.getCurrentFps(); }
+    public static double getCurrentTps() { return TpsHud.getCurrentTps(); }
 
     /** In-game text size in MC pixels, matching what renderers draw. */
     public static int[] measureText(String text, boolean background) {

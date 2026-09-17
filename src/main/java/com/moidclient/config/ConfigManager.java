@@ -298,7 +298,7 @@ public class ConfigManager {
         registerDefault("zoom", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("freelook", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
-        // removed: testModule, armorStatus, fpsBoost (not implemented)
+        // removed: testModule, fpsBoost (not implemented)
     }
 
     private void registerDefault(String id, ModuleConfig cfg, boolean overwrite) {
@@ -308,8 +308,13 @@ public class ConfigManager {
     }
 
     private void fillMissingDefaults() {
+        // heal corrupt (null-deserialized) entries in place; the healing
+        // below fills blanks with defaults.
+        for (var e : modules.entrySet()) {
+            if (e.getValue() == null) e.setValue(new ModuleConfig());
+        }
         // remove old unused modules (keep cpsCounter now implemented)
-        modules.keySet().removeIf(k -> k.equals("testModule") || k.equals("armorStatus") || k.equals("fpsBoost"));
+        modules.keySet().removeIf(k -> k.equals("testModule") || k.equals("fpsBoost"));
         for (var e : modules.entrySet()) {
             ModuleConfig c = e.getValue();
             if (c.custom == null) c.custom = new LinkedHashMap<>();
@@ -483,34 +488,34 @@ public class ConfigManager {
         }
     }
 
-    public String getAccentColor() {
+    public synchronized String getAccentColor() {
         return accentColor;
     }
 
-    public void setAccentColor(String color) {
+    public synchronized void setAccentColor(String color) {
         if (color != null && color.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
             this.accentColor = color;
             save();
         }
     }
 
-    public String getThemeTextColor() { return themeTextColor; }
-    public void setThemeTextColor(String color) {
+    public synchronized String getThemeTextColor() { return themeTextColor; }
+    public synchronized void setThemeTextColor(String color) {
         if (color != null && color.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
             this.themeTextColor = color;
             save();
         }
     }
 
-    public Map<String, ModuleConfig> getModules() {
+    public synchronized Map<String, ModuleConfig> getModules() {
         return modules;
     }
 
-    public ModuleConfig getModule(String id) {
+    public synchronized ModuleConfig getModule(String id) {
         return modules.get(id);
     }
 
-    public JsonObject toJson() {
+    public synchronized JsonObject toJson() {
         JsonObject out = new JsonObject();
         out.addProperty("accentColor", accentColor);
         out.addProperty("themeTextColor", themeTextColor);
@@ -539,7 +544,7 @@ public class ConfigManager {
         "hitboxWidth", "hitboxOpacity", "hitboxRange",
         "hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor",
         "zoomMode", "zoomKey", "zoomLevel", "zoomMinLevel", "zoomMaxLevel",
-        "zoomScrollAdjust", "zoomScrollStep", "zoomCinematic", "zoomSmooth", "zoomSmoothSpeed", "zoomLowerSensitivity",
+        "zoomScrollAdjust", "zoomScrollStep", "zoomCinematic", "zoomSmooth", "zoomSmoothOut", "zoomSmoothSpeed", "zoomLowerSensitivity",
         "freelookMode", "freelookKey", "freelookSensitivity",
         "potionColored", "potionShowAmplifier", "potionShowDuration", "potionShowAmbient",
         "potionMaxEffects", "armorShowDurability", "armorDurabilityMode", "armorDynamicColor",
@@ -550,7 +555,7 @@ public class ConfigManager {
         return key != null && KNOWN_MODULE_KEYS.contains(key);
     }
 
-    public void updateModule(String id, JsonObject data) {
+    public synchronized void updateModule(String id, JsonObject data) {
         ModuleConfig cfg = modules.get(id);
         if (cfg == null) {
             cfg = new ModuleConfig();
@@ -560,9 +565,15 @@ public class ConfigManager {
         if (data.has("enabled")) cfg.enabled = data.get("enabled").getAsBoolean();
         if (data.has("x")) cfg.x = data.get("x").getAsInt();
         if (data.has("y")) cfg.y = data.get("y").getAsInt();
-        if (data.has("scale")) cfg.scale = data.get("scale").getAsDouble();
-        if (data.has("opacity")) cfg.opacity = data.get("opacity").getAsDouble();
-        if (data.has("backgroundOpacity")) cfg.backgroundOpacity = data.get("backgroundOpacity").getAsDouble();
+        if (data.has("scale")) {
+            double v = data.get("scale").getAsDouble();
+            if (v > 0) cfg.scale = v;
+        }
+        if (data.has("opacity")) {
+            double v = data.get("opacity").getAsDouble();
+            cfg.opacity = Math.max(0.2, Math.min(1.0, v == 0 ? 1.0 : v));
+        }
+        if (data.has("backgroundOpacity")) cfg.backgroundOpacity = Math.max(0, Math.min(1, data.get("backgroundOpacity").getAsDouble()));
         if (data.has("color") && !data.get("color").isJsonNull()) cfg.color = data.get("color").getAsString();
         if (data.has("background")) cfg.background = data.get("background").getAsBoolean();
         if (data.has("backgroundColor") && !data.get("backgroundColor").isJsonNull()) {
@@ -576,7 +587,11 @@ public class ConfigManager {
                 if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.textColor = c;
             }
         }
-        if (data.has("format") && !data.get("format").isJsonNull()) cfg.format = data.get("format").getAsString();
+        if (data.has("format") && !data.get("format").isJsonNull()) {
+            String f = data.get("format").getAsString();
+            if (f != null && f.length() > 512) f = f.substring(0, 512);
+            cfg.format = f;
+        }
         if (data.has("shadow")) cfg.shadow = data.get("shadow").getAsBoolean();
         if (data.has("fpsMode") && !data.get("fpsMode").isJsonNull()) {
             String m = data.get("fpsMode").getAsString();
@@ -588,7 +603,7 @@ public class ConfigManager {
         if (data.has("potionShowAmplifier")) cfg.potionShowAmplifier = data.get("potionShowAmplifier").getAsBoolean();
         if (data.has("potionShowDuration")) cfg.potionShowDuration = data.get("potionShowDuration").getAsBoolean();
         if (data.has("potionShowAmbient")) cfg.potionShowAmbient = data.get("potionShowAmbient").getAsBoolean();
-        if (data.has("potionMaxEffects")) cfg.potionMaxEffects = data.get("potionMaxEffects").getAsInt();
+        if (data.has("potionMaxEffects")) cfg.potionMaxEffects = Math.max(1, Math.min(10, data.get("potionMaxEffects").getAsInt()));
         if (data.has("armorShowDurability")) cfg.armorShowDurability = data.get("armorShowDurability").getAsBoolean();
         if (data.has("armorLowWarn")) cfg.armorLowWarn = data.get("armorLowWarn").getAsBoolean();
         if (data.has("armorDurabilityMode") && !data.get("armorDurabilityMode").isJsonNull()) {
@@ -621,14 +636,17 @@ public class ConfigManager {
         if (data.has("keystrokesShowS")) cfg.keystrokesShowS = data.get("keystrokesShowS").getAsBoolean();
         if (data.has("keystrokesShowD")) cfg.keystrokesShowD = data.get("keystrokesShowD").getAsBoolean();
         if (data.has("keystrokesShowCps")) cfg.keystrokesShowCps = data.get("keystrokesShowCps").getAsBoolean();
-        if (data.has("keystrokesGap")) cfg.keystrokesGap = data.get("keystrokesGap").getAsInt();
+        if (data.has("keystrokesGap")) cfg.keystrokesGap = Math.max(0, data.get("keystrokesGap").getAsInt());
         if (data.has("keystrokesOutline")) cfg.keystrokesOutline = data.get("keystrokesOutline").getAsBoolean();
         if (data.has("keystrokesPressedColor")) {
             if (data.get("keystrokesPressedColor").isJsonNull()) cfg.keystrokesPressedColor = null;
-            else cfg.keystrokesPressedColor = data.get("keystrokesPressedColor").getAsString();
+            else {
+                String c = data.get("keystrokesPressedColor").getAsString();
+                if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.keystrokesPressedColor = c;
+            }
         }
-        if (data.has("fullbrightGamma")) cfg.fullbrightGamma = data.get("fullbrightGamma").getAsDouble();
-        if (data.has("blockOutlineWidth")) cfg.blockOutlineWidth = data.get("blockOutlineWidth").getAsDouble();
+        if (data.has("fullbrightGamma")) cfg.fullbrightGamma = Math.max(1.0, Math.min(15.0, data.get("fullbrightGamma").getAsDouble()));
+        if (data.has("blockOutlineWidth")) cfg.blockOutlineWidth = Math.max(1.0, Math.min(5.0, data.get("blockOutlineWidth").getAsDouble()));
         if (data.has("blockOutlineFade")) cfg.blockOutlineFade = data.get("blockOutlineFade").getAsBoolean();
         if (data.has("blockOutlineColor2")) {
             if (data.get("blockOutlineColor2").isJsonNull()) cfg.blockOutlineColor2 = null;
@@ -645,17 +663,39 @@ public class ConfigManager {
             String m = data.get("perspectiveSkipMode").getAsString();
             if (m.equals("skipBack") || m.equals("skipFront")) cfg.perspectiveSkipMode = m;
         }
-        if (data.has("zoomLevel")) cfg.zoomLevel = data.get("zoomLevel").getAsDouble();
-        if (data.has("zoomMinLevel")) cfg.zoomMinLevel = data.get("zoomMinLevel").getAsDouble();
-        if (data.has("zoomMaxLevel")) cfg.zoomMaxLevel = data.get("zoomMaxLevel").getAsDouble();
+        if (data.has("zoomMinLevel")) {
+            double v = data.get("zoomMinLevel").getAsDouble();
+            cfg.zoomMinLevel = Math.max(1.0, Math.min(10.0, v <= 0 ? 1.5 : v));
+        }
+        if (data.has("zoomMaxLevel")) {
+            double v = data.get("zoomMaxLevel").getAsDouble();
+            cfg.zoomMaxLevel = Math.max(2.0, Math.min(12.0, v <= 0 ? 10.0 : v));
+        }
+        if (cfg.zoomMinLevel <= 0) cfg.zoomMinLevel = 1.5;
+        if (cfg.zoomMaxLevel <= 0) cfg.zoomMaxLevel = 10.0;
+        if (cfg.zoomMaxLevel < cfg.zoomMinLevel) cfg.zoomMaxLevel = cfg.zoomMinLevel;
+        if (data.has("zoomLevel")) {
+            double v = data.get("zoomLevel").getAsDouble();
+            if (v == 0) v = 4.0;
+            cfg.zoomLevel = Math.max(cfg.zoomMinLevel, Math.min(cfg.zoomMaxLevel, v));
+        }
         if (data.has("zoomScrollAdjust")) cfg.zoomScrollAdjust = data.get("zoomScrollAdjust").getAsBoolean();
-        if (data.has("zoomScrollStep")) cfg.zoomScrollStep = data.get("zoomScrollStep").getAsDouble();
+        if (data.has("zoomScrollStep")) {
+            double v = data.get("zoomScrollStep").getAsDouble();
+            cfg.zoomScrollStep = Math.max(0.25, Math.min(2.0, v == 0 ? 1.0 : v));
+        }
         if (data.has("zoomCinematic")) cfg.zoomCinematic = data.get("zoomCinematic").getAsBoolean();
         if (data.has("zoomSmooth")) cfg.zoomSmooth = data.get("zoomSmooth").getAsBoolean();
         if (data.has("zoomSmoothOut")) cfg.zoomSmoothOut = data.get("zoomSmoothOut").getAsBoolean();
-        if (data.has("zoomSmoothSpeed")) cfg.zoomSmoothSpeed = data.get("zoomSmoothSpeed").getAsDouble();
+        if (data.has("zoomSmoothSpeed")) {
+            double v = data.get("zoomSmoothSpeed").getAsDouble();
+            cfg.zoomSmoothSpeed = Math.max(0.05, Math.min(1.0, v == 0 ? 0.4 : v));
+        }
         if (data.has("zoomLowerSensitivity")) cfg.zoomLowerSensitivity = data.get("zoomLowerSensitivity").getAsBoolean();
-        if (data.has("zoomKey")) cfg.zoomKey = data.get("zoomKey").getAsInt();
+        if (data.has("zoomKey")) {
+            int v = data.get("zoomKey").getAsInt();
+            if (v > 0) cfg.zoomKey = v;
+        }
         if (data.has("zoomMode") && !data.get("zoomMode").isJsonNull()) {
             String m = data.get("zoomMode").getAsString();
             if (m.equals("hold") || m.equals("toggle")) cfg.zoomMode = m;
@@ -664,22 +704,40 @@ public class ConfigManager {
             String m = data.get("freelookMode").getAsString();
             if (m.equals("hold") || m.equals("toggle")) cfg.freelookMode = m;
         }
-        if (data.has("freelookSensitivity")) cfg.freelookSensitivity = data.get("freelookSensitivity").getAsDouble();
-        if (data.has("freelookKey")) cfg.freelookKey = data.get("freelookKey").getAsInt();
+        if (data.has("freelookSensitivity")) {
+            double v = data.get("freelookSensitivity").getAsDouble();
+            cfg.freelookSensitivity = Math.max(0.25, Math.min(3.0, v == 0 ? 1.0 : v));
+        }
+        if (data.has("freelookKey")) {
+            int v = data.get("freelookKey").getAsInt();
+            if (v > 0) cfg.freelookKey = v;
+        }
         if (data.has("hitboxPlayers")) cfg.hitboxPlayers = data.get("hitboxPlayers").getAsBoolean();
         if (data.has("hitboxHostiles")) cfg.hitboxHostiles = data.get("hitboxHostiles").getAsBoolean();
         if (data.has("hitboxPassives")) cfg.hitboxPassives = data.get("hitboxPassives").getAsBoolean();
         if (data.has("hitboxOther")) cfg.hitboxOther = data.get("hitboxOther").getAsBoolean();
         if (data.has("hitboxEyeLine")) cfg.hitboxEyeLine = data.get("hitboxEyeLine").getAsBoolean();
-        if (data.has("hitboxEyeLength")) cfg.hitboxEyeLength = data.get("hitboxEyeLength").getAsDouble();
-        if (data.has("hitboxPadding")) cfg.hitboxPadding = data.get("hitboxPadding").getAsDouble();
+        if (data.has("hitboxEyeLength")) {
+            double v = data.get("hitboxEyeLength").getAsDouble();
+            cfg.hitboxEyeLength = Math.max(1.0, Math.min(5.0, v == 0 ? 2.0 : v));
+        }
+        if (data.has("hitboxPadding")) cfg.hitboxPadding = Math.max(0.0, Math.min(0.5, data.get("hitboxPadding").getAsDouble()));
         if (data.has("hitboxRenderRate") && !data.get("hitboxRenderRate").isJsonNull()) {
             String r = data.get("hitboxRenderRate").getAsString();
             if (r.equals("Every frame") || r.equals("Every 2nd frame") || r.equals("Every 3rd frame")) cfg.hitboxRenderRate = r;
         }
-        if (data.has("hitboxWidth")) cfg.hitboxWidth = data.get("hitboxWidth").getAsDouble();
-        if (data.has("hitboxOpacity")) cfg.hitboxOpacity = data.get("hitboxOpacity").getAsDouble();
-        if (data.has("hitboxRange")) cfg.hitboxRange = data.get("hitboxRange").getAsDouble();
+        if (data.has("hitboxWidth")) {
+            double v = data.get("hitboxWidth").getAsDouble();
+            cfg.hitboxWidth = Math.max(1.0, Math.min(5.0, v == 0 ? 2.0 : v));
+        }
+        if (data.has("hitboxOpacity")) {
+            double v = data.get("hitboxOpacity").getAsDouble();
+            cfg.hitboxOpacity = Math.max(0.1, Math.min(1.0, v == 0 ? 0.9 : v));
+        }
+        if (data.has("hitboxRange")) {
+            double v = data.get("hitboxRange").getAsDouble();
+            cfg.hitboxRange = Math.max(16.0, Math.min(128.0, v == 0 ? 64.0 : v));
+        }
         for (String colorKey : new String[]{"hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor"}) {
             if (data.has(colorKey) && !data.get(colorKey).isJsonNull()) {
                 String c = data.get(colorKey).getAsString();
@@ -711,7 +769,7 @@ public class ConfigManager {
         save();
     }
 
-    public void importFromJson(JsonObject json) {
+    public synchronized void importFromJson(JsonObject json) {
         if (json.has("accentColor")) {
             String c = json.get("accentColor").getAsString();
             if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
@@ -733,7 +791,7 @@ public class ConfigManager {
         }
         ensureDefaults(false);
         fillMissingDefaults();
-        this.root = json;
+        this.root = json.deepCopy();
         save();
     }
 

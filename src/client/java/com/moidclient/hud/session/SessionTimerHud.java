@@ -50,7 +50,7 @@ public final class SessionTimerHud {
         if ("world".equals(scope) && mc.level == null) return;
 
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "Session: {time}";
-        String time = formatElapsed(elapsedMs(scopeOf(mod)));
+        String time = formatElapsed(elapsedMs(scope));
         String text = fmt.replace("{time}", time).replace("{value}", time);
 
         int color;
@@ -78,7 +78,9 @@ public final class SessionTimerHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, textW + 3, textH + 3, bg);
             }
             graphics.text(font, text, 0, 0, color, shadow);
@@ -120,6 +122,7 @@ public final class SessionTimerHud {
             if ("server".equals(scope)) {
                 Object conn = mc != null ? mc.getConnection() : null;
                 if (conn == null) {
+                    lastConnection = null;
                     return serverStartMs <= 0 ? 0 : System.currentTimeMillis() - serverStartMs;
                 }
                 if (conn != lastConnection || serverStartMs <= 0) {
@@ -129,6 +132,7 @@ public final class SessionTimerHud {
                 return System.currentTimeMillis() - serverStartMs;
             }
             if (mc == null || mc.level == null) {
+                lastLevel = null;
                 return worldStartMs <= 0 ? 0 : System.currentTimeMillis() - worldStartMs;
             }
             if (mc.level != lastLevel || worldStartMs <= 0) {

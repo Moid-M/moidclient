@@ -20,12 +20,12 @@ A lightweight, open-source Fabric client with a clickgui that runs entirely in y
 | 26.2 | >=0.18.0 (tested 0.19.5) | 25 | ✅ Supported |
 | 26.3 | >=0.18.0 (tested 0.19.5) | 25 | ✅ Supported |
 
-Requires **Java 25** (Temurin 25+). One jar per Minecraft version — download the one matching your game (`Moid-Client-v1.2.0+26.1.jar`, `...+26.2.jar` or `...+26.3.jar`) from [Releases](../../releases).
+Requires **Java 25** (Temurin 25+). One jar per Minecraft version — download the one matching your game (`Moid-Client-v1.3.0+26.1.jar`, `...+26.2.jar` or `...+26.3.jar`) from [Releases](../../releases).
 
 ## Installation
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.18.0 or newer for your Minecraft version (26.1, 26.2 or 26.3).
-2. Download the jar matching your game from [Releases](../../releases) (`Moid-Client-v1.2.0+26.1.jar`, `...+26.2.jar` or `...+26.3.jar`).
+2. Download the jar matching your game from [Releases](../../releases) (`Moid-Client-v1.3.0+26.1.jar`, `...+26.2.jar` or `...+26.3.jar`).
 3. Drop it into your `.minecraft/mods` folder (with `fabric-api` if not already present).
 4. Launch Minecraft. Moid starts a local webserver — press `K` (or check the game log) for `http://localhost:18423` (auto `18423-18450` fallback). Open that URL to access the clickgui.
 

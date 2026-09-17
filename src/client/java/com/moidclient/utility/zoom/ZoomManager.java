@@ -92,8 +92,7 @@ public final class ZoomManager {
         if (smoothOut && animOut && baseFov > 0 && currentFov > 0) {
             currentFov += (baseFov - currentFov) * factor;
             if (Math.abs(baseFov - currentFov) < 0.3) {
-                currentFov = baseFov;
-                animOut = false;
+                snapInactive();
                 return -1f;
             }
             return (float) currentFov;
@@ -159,6 +158,16 @@ public final class ZoomManager {
             }
             moduleEnabled = true;
             lastMod = mod;
+            smoothIn = mod.zoomSmooth;
+            smoothOut = mod.zoomSmoothOut;
+            speed = mod.zoomSmoothSpeed <= 0 ? 0.4 : Math.max(0.05, Math.min(1.0, mod.zoomSmoothSpeed));
+            // Snapshot refreshed every tick (even while released) so the
+            // first press after a dashboard change uses fresh values.
+            scrollAdjust = mod.zoomScrollAdjust;
+            scrollStep = mod.zoomScrollStep <= 0 ? 1.0 : Math.max(0.25, Math.min(2.0, mod.zoomScrollStep));
+            minLevel = mod.zoomMinLevel;
+            maxLevel = mod.zoomMaxLevel;
+            cinematic = mod.zoomCinematic;
             boolean toggleMode = "toggle".equals(mod.zoomMode);
             // Dashboard is the remote: push its binding into the vanilla
             // mapping (visible + rebindable in Controls, persisted by vanilla).
@@ -179,11 +188,6 @@ public final class ZoomManager {
             }
 
             double level = clampLevel(mod.zoomLevel <= 0 ? 4.0 : mod.zoomLevel);
-            scrollAdjust = mod.zoomScrollAdjust;
-            scrollStep = mod.zoomScrollStep <= 0 ? 1.0 : Math.max(0.25, Math.min(2.0, mod.zoomScrollStep));
-            minLevel = mod.zoomMinLevel;
-            maxLevel = mod.zoomMaxLevel;
-            cinematic = mod.zoomCinematic;
             OptionAccess fov = OptionAccess.find(mc.options, "fov", "getFov");
             if (fov == null) {
                 if (!accessorWarned) {
@@ -199,9 +203,12 @@ public final class ZoomManager {
                 return;
             }
             if (baseFov < 0) {
-                baseFov = base;
                 LOGGER.debug("[MoidClient/Zoom] engaged: baseFov={} level={} key={}", base, level, mod.zoomKey);
             }
+            // Re latch every tick while held: the FOV option is never written
+            // by zoom (only the computed frame FOV is overwritten), so any
+            // change here is the user's own slider move and must be honored.
+            baseFov = base;
             // Recomputed every tick (not just on engage) so scroll-adjust
             // takes effect while held.
             targetFov = Math.max(1.0, base / level);

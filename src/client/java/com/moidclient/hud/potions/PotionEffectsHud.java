@@ -72,17 +72,19 @@ public final class PotionEffectsHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, boxW + 3, boxH + 3, bg);
             }
             for (int i = 0; i < rows.size(); i++) {
                 Row row = rows.get(i);
-                int color = row.color() != null
-                        ? (0xFF000000 | (row.color() & 0xFFFFFF))
-                        : defaultColor(mod);
+                int color;
                 if (row.color() != null) {
                     int alpha = (int) Math.round(Math.max(0, Math.min(1, mod.opacity)) * 255);
                     color = (alpha << 24) | (row.color() & 0xFFFFFF);
+                } else {
+                    color = defaultColor(mod);
                 }
                 graphics.text(font, row.text(), 0, i * ROW_H, color, shadow);
             }

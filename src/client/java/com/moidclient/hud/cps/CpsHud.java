@@ -12,8 +12,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.DeltaTracker;
 import org.joml.Matrix3x2fStack;
 
-import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * CPS Counter HUD - shows clicks per second (left / right / both).
@@ -21,8 +21,9 @@ import java.util.Deque;
  * Category: HUD / Combat
  */
 public final class CpsHud {
-    private static final Deque<Long> leftClicks = new ArrayDeque<>();
-    private static final Deque<Long> rightClicks = new ArrayDeque<>();
+    // Lock-free deques: tick writes, render + WS-preview threads read.
+    private static final Deque<Long> leftClicks = new ConcurrentLinkedDeque<>();
+    private static final Deque<Long> rightClicks = new ConcurrentLinkedDeque<>();
     private static boolean wasLeftDown = false;
     private static boolean wasRightDown = false;
     private static int peakLeft = 0;
@@ -144,7 +145,9 @@ public final class CpsHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, textW + 3, textH + 3, bg);
             }
             graphics.text(font, text, 0, 0, color, shadow);
@@ -186,9 +189,9 @@ public final class CpsHud {
         String text = fmt.replace("{left}", String.valueOf(left))
                          .replace("{right}", String.valueOf(right))
                          .replace("{cps}", String.valueOf(Math.max(left, right)))
-                         .replace("{peak}", String.valueOf(Math.max(peakLeft, peakRight)))
-                         .replace("{peakLeft}", String.valueOf(peakLeft))
-                         .replace("{peakRight}", String.valueOf(peakRight))
+                          .replace("{peakLeft}", String.valueOf(peakLeft))
+                          .replace("{peakRight}", String.valueOf(peakRight))
+                          .replace("{peak}", String.valueOf(Math.max(peakLeft, peakRight)))
                          .replace("{l}", String.valueOf(left))
                          .replace("{r}", String.valueOf(right))
                          .replace("{value}", String.valueOf(left))

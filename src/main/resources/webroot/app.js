@@ -1,13 +1,6 @@
 ﻿// Moid Client - HUD Editor + inline pickers, center fix, drag fix, no X/Y in card
 const MOID_APP_VERSION='1.1.0-dev2';
 console.log('[MoidClient] app.js '+MOID_APP_VERSION);
-const PRESETS = [
-  { name: 'Electric Violet', hex: '#8B5CF6' },
-  { name: 'Neon Mint', hex: '#10B981' },
-  { name: 'Cyber Cyan', hex: '#06B6D4' },
-  { name: 'Flame Crimson', hex: '#EF4444' },
-  { name: 'Sunset Amber', hex: '#F59E0B' },
-];
 // Generic icon library keyed by icon NAME (from each module's definition()).
 // No module ids here - iconFor() resolves via the served metadata.
 const ICONS = {
@@ -584,19 +577,6 @@ function isLight(hex){
   const c=hex.replace('#',''); const r=parseInt(c.substring(0,2),16), g=parseInt(c.substring(2,4),16), b=parseInt(c.substring(4,6),16);
   const l=(0.299*r+0.587*g+0.114*b)/255; return l>0.6;
 }
-function renderPresets(containerId,onPick){
-  const c=document.getElementById(containerId); if(!c) return; c.innerHTML='';
-  PRESETS.forEach(p=>{
-    const b=document.createElement('button');
-    b.className='w-full h-14 rounded-xl border flex flex-col items-center justify-center gap-1 text-[11px] font-medium';
-    b.style.cssText=`background:var(--bg);border-color:var(--border);transition: border-color 220ms, transform 220ms cubic-bezier(0.34,1.56,0.64,1)`;
-    b.innerHTML=`<span class="w-6 h-6 rounded-full" style="background:${p.hex};box-shadow:0 0 10px ${p.hex}55"></span>${p.name}`;
-    b.onclick=()=>onPick(p.hex);
-    b.onmouseenter=()=>{b.style.borderColor=p.hex; b.style.transform='translateY(-1px) scale(1.02)'};
-    b.onmouseleave=()=>{b.style.borderColor='var(--border)'; b.style.transform='none'};
-    c.appendChild(b);
-  });
-}
 function updateSliderFill(el){
   const min=parseFloat(el.min), max=parseFloat(el.max), val=parseFloat(el.value);
   const pct=((val-min)/(max-min))*100;
@@ -637,6 +617,12 @@ const CODE_FROM_KEYBOARD = {'Space':32,'Enter':257,'NumpadEnter':257,'Tab':258,'
 for(let c=48;c<=57;c++) CODE_FROM_KEYBOARD['Digit'+String.fromCharCode(c)]=c;
 for(let c=65;c<=90;c++) CODE_FROM_KEYBOARD['Key'+String.fromCharCode(c)]=c;
 for(let f=1;f<=12;f++) CODE_FROM_KEYBOARD['F'+f]=289+f;
+function hudEnabledCount(){
+  try{
+    const mods=config.modules||{};
+    return Object.keys(mods).filter(id=>mods[id]&&mods[id].enabled&&(!MODULES_META[id]||MODULES_META[id].cat==='hud')).length;
+  }catch(e){ return 0; }
+}
 function updateKeybindTab(){
   const z=document.querySelector('#kbZoomKey'), f=document.querySelector('#kbFreelookKey');
   if(z) z.textContent=keyName(config.modules?.zoom?.zoomKey ?? 67);
@@ -851,7 +837,7 @@ function render(animate=false){
     for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display='';
   }
   const hudCountEl=document.querySelector('#hudCount');
-  if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
+  if(hudCountEl) hudCountEl.textContent=hudEnabledCount();
   $$('input[type="range"]').forEach(updateSliderFill);
   $$('[data-toggle]').forEach(el=>{
     el.onclick=(e)=>{
@@ -863,7 +849,7 @@ function render(animate=false){
       el.classList.toggle('active',next);
       const card=el.closest('.card');
       if(card){ card.style.transform='scale(1.015)'; setTimeout(()=>card.style.transform='',160); }
-      if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
+      if(hudCountEl) hudCountEl.textContent=hudEnabledCount();
       send({type:'UPDATE_MODULE',id,data:{enabled:next}});
     };
   });
@@ -879,8 +865,13 @@ function render(animate=false){
       e.stopPropagation();
       const id=b.getAttribute('data-reset');
       const cur=config.modules[id]||{};
+      const meta=MODULES_META[id];
       const patch={};
       for(const k of ['x','y','scale','opacity']) if(k in cur) patch[k]={x:10,y:10,scale:1,opacity:1}[k];
+      // Plus every declared option default (geometry keys have none, covered above).
+      if(meta&&meta.options) for(const o of meta.options){
+        if(o&&o.default!==undefined&&o.default!==null&&(o.key in cur)) patch[o.key]=o.default;
+      }
       if(!Object.keys(patch).length) return;
       send({type:'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]={...cur, ...patch};
@@ -1067,7 +1058,7 @@ function render(animate=false){
 function patchFromSync(newData){
   config=newData; if(!config.modules) config.modules={};
   const hudCountEl=document.querySelector('#hudCount');
-  if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
+  if(hudCountEl) hudCountEl.textContent=hudEnabledCount();
   const allCountEl=document.querySelector('#allCount');
   if(allCountEl){
     const filtered = MODULE_ORDER.filter(id=>{
@@ -1186,7 +1177,7 @@ function handleSync(data){
   if(data.accentColor) setAccent(data.accentColor);
   if(data.themeTextColor) setThemeText(data.themeTextColor);
   if(!config.modules) config.modules={};
-  if(!hasInitialRendered){ config=data; render(true); setTimeout(syncEditorItem, 80); return; }
+  if(!hasInitialRendered){ config=data; render(true); updateKeybindTab(); setTimeout(syncEditorItem, 80); return; }
   if(isDraggingSlider || isDraggingHud){ config=data; patchFromSync(data); return; }
   patchFromSync(data);
   setTimeout(syncEditorItem, 20);

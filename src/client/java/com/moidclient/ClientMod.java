@@ -92,19 +92,17 @@ public class ClientMod implements ClientModInitializer {
                     com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_ALT),
                 moidCategory
         ));
-        // Controls screen is master on boot: adopt live bindings into config
-        // (translated back to dashboard/GLFW numbering).
+        // Config (dashboard) is master on boot: these vanilla mappings were
+        // just constructed with defaults — client entrypoints run before
+        // GameOptions loads options.txt — so push the saved codes in.
+        // Reading the live defaults back here would wipe custom binds on
+        // every restart. Controls rebinds during play are still adopted by
+        // the per-second reverse sync below.
         try {
             var zoomMod = configManager.getModule("zoom");
-            if (zoomMod != null) {
-                int live = com.moidclient.util.KeybindUtil.readCode(zoomKey);
-                if (live > 0) zoomMod.zoomKey = com.moidclient.utility.keybind.NativeKeys.fromNative(live);
-            }
+            if (zoomMod != null) com.moidclient.utility.keybind.Keybinds.adoptConfig(zoomKey, zoomMod.zoomKey);
             var freelookMod = configManager.getModule("freelook");
-            if (freelookMod != null) {
-                int live = com.moidclient.util.KeybindUtil.readCode(freeLookKey);
-                if (live > 0) freelookMod.freelookKey = com.moidclient.utility.keybind.NativeKeys.fromNative(live);
-            }
+            if (freelookMod != null) com.moidclient.utility.keybind.Keybinds.adoptConfig(freeLookKey, freelookMod.freelookKey);
             configManager.save();
         } catch (Exception e) { LOGGER.error("[MoidClient] Failed to adopt keybinds", e); }
 
@@ -113,7 +111,7 @@ public class ClientMod implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (openGuiKey.consumeClick()) {
+            if (openGuiKey != null) while (openGuiKey.consumeClick()) {
                 openWebGui();
             }
             // window size broadcast for HUD editor rectangle preview (throttled 10 ticks)
@@ -173,7 +171,8 @@ public class ClientMod implements ClientModInitializer {
         });
         // schedule initial window size probe without raw Thread - use tick counter
         // will be sent on next tick where window is available (handled via windowTick counter)
-        LOGGER.info("[MoidClient] Initialized. Press [K] to open Web Dashboard at {}", serverManager.getBaseUrl());
+        String baseUrl = serverManager.getActivePort() == -1 ? "server failed to start (see log)" : serverManager.getBaseUrl();
+        LOGGER.info("[MoidClient] Initialized. Press [K] to open Web Dashboard at {}", baseUrl);
     }
 
     public void openWebGui() {
@@ -238,13 +237,6 @@ public class ClientMod implements ClientModInitializer {
                 open3.invoke(os3, url);
                 return true;
             } catch (NoSuchMethodException ignored) {}
-
-            // Try enum OS field
-            for (var f : utilClass.getDeclaredFields()) {
-                if (f.getType().getSimpleName().equals("OperatingSystem") || f.getType().getSimpleName().equals("OS")) {
-                    // static instance
-                }
-            }
         } catch (Exception e) {
             LOGGER.debug("[MoidClient] Util.open fallback failed: {}", e.getMessage());
         }

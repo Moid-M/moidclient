@@ -7,8 +7,6 @@ import io.javalin.http.staticfiles.Location;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.function.Supplier;
 
 /**
@@ -102,7 +100,7 @@ public class ServerManager {
                       LOGGER.warn("[MoidClient] Failed to serialize module defs", e);
                   }
               }
-              ctx.status(503).result("[]");
+              ctx.status(503).contentType("application/json").result("[]");
           })
           .get("/api/port", ctx -> ctx.result(String.valueOf(port)))
           .get("/api/health", ctx -> ctx.json(java.util.Map.of("status", "ok", "port", port)))
@@ -122,18 +120,14 @@ public class ServerManager {
     }
 
     public void stop() {
-        if (app != null) {
-            app.stop();
-            LOGGER.info("[MoidClient] Server stopped");
+        try {
+            if (app != null) app.stop();
+        } catch (Exception e) {
+            LOGGER.warn("[MoidClient] Server stop failed", e);
+        } finally {
+            app = null;
+            activePort = -1;
         }
-    }
-
-    public static boolean isPortAvailable(int port) {
-        try (ServerSocket ss = new ServerSocket(port)) {
-            ss.setReuseAddress(true);
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
+        LOGGER.info("[MoidClient] Server stopped");
     }
 }

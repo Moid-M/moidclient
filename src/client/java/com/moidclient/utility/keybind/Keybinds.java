@@ -56,6 +56,23 @@ public final class Keybinds {
     }
 
     /**
+     * Boot path: pushes a saved dashboard code into a freshly registered
+     * vanilla mapping. Client entrypoints run before GameOptions loads
+     * options.txt, so the mapping still holds its constructor default here —
+     * reading it back into config would wipe every custom bind on restart.
+     * The push is recorded so the per-tick forward sync doesn't fight it.
+     */
+    public static void adoptConfig(KeyMapping mapping, int code) {
+        try {
+            if (mapping == null || code <= 0) return;
+            int nativeCode = NativeKeys.toNative(code);
+            mapping.setKey(NativeKeys.keyType().getOrCreate(nativeCode));
+            try { KeyMapping.resetMapping(); } catch (Exception ignored) {}
+            LAST_PUSHED.put(mapping, code);
+        } catch (Exception ignored) {}
+    }
+
+    /**
      * Evaluates the trigger: raw hold-state in hold mode, latched press
      * state in toggle mode. Drains the click queue so it never piles up.
      */

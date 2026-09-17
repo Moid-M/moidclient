@@ -44,7 +44,7 @@ public final class FpsHud {
 
         int fpsVal = getFpsForMode(mod.fpsMode, deltaTracker);
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "FPS: {fps}";
-        String text = fmt.replace("{fps}", String.valueOf(fpsVal)).replace("{value}", String.valueOf(fpsVal)).replace("{ping}", String.valueOf(fpsVal));
+        String text = fmt.replace("{fps}", String.valueOf(fpsVal)).replace("{value}", String.valueOf(fpsVal));
 
         int color;
         if (mod.fpsDynamicColor) {
@@ -76,7 +76,9 @@ public final class FpsHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, textW + 3, textH + 3, bg);
             }
             graphics.text(font, text, 0, 0, color, shadow);
@@ -96,8 +98,7 @@ public final class FpsHud {
         int fps = stats != null ? stats.fps : 0;
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "FPS: {fps}";
         String text = fmt.replace("{fps}", String.valueOf(fps))
-                .replace("{value}", String.valueOf(fps))
-                .replace("{ping}", String.valueOf(fps));
+                .replace("{value}", String.valueOf(fps));
         int[] size = HudManager.measureText(text, mod.background);
         return new ModulePreview("fpsCounter", text, "text", size[0], size[1], false);
     }
