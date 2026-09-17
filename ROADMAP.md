@@ -25,6 +25,9 @@ Finished modules also live in the README table; this file tracks everything else
 | Custom Hitboxes | Visuals | `hitboxes` |
 | Zoom | Utility | `zoom` |
 | FreeLook | Utility | `freelook` |
+| ToggleSprint | Utility | `toggleSprint` |
+| ToggleSneak | Utility | `toggleSneak` |
+| Item Physics | Visuals | `itemPhysics` |
 
 ## 🔨 In progress (this batch)
 
@@ -40,8 +43,6 @@ Finished modules also live in the README table; this file tracks everything else
 
 | Module | Category | Why |
 |---|---|---|
-| ToggleSprint | Utility | #1 client staple, servers expect it |
-| ToggleSneak | Utility | pairs with ToggleSprint |
 | Crosshair Customization | HUD | already planned in README |
 | Direction / Compass | HUD | cheap, loved by builders/PvPers |
 | Combo Counter | HUD | consecutive hits, PvP staple, needs attack hook |
@@ -62,7 +63,6 @@ Finished modules also live in the README table; this file tracks everything else
 - Damage Indicator (HUD, floating damage numbers, needs attack hook like Combo)
 - Zoom level reset (Utility, small: one-click reset for scroll-adjusted zoom)
 - Discord RPC (Utility, rich presence, needs Discord IPC dependency)
-- Item Physics (Visuals, drop animations client-side)
 - Color Saturation (Visuals, saturation slider, fullbright family)
 - Hit Color (Visuals, entity hurt tint)
 - Motion Blur (Visuals, heavy: frame accumulation, invasive)

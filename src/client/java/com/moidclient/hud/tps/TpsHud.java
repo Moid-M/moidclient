@@ -70,6 +70,7 @@ public final class TpsHud {
         if (scale <= 0) scale = 1.0;
 
         Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -115,7 +116,22 @@ public final class TpsHud {
     private static double sample() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.level == null) return lastTps;
+            if (mc == null) return lastTps;
+            // Singleplayer: measure the integrated server thread directly.
+            // Game-time sampling goes blind when the render thread itself is
+            // dying (fewer than 2 samples per 3s window freezes the display
+            // at its last value) - MSPT never lies.
+            try {
+                var server = mc.getSingleplayerServer();
+                if (server != null) {
+                    long avgNanos = server.getAverageTickTimeNanos();
+                    if (avgNanos > 0) {
+                        lastTps = Math.max(0.0, Math.min(20.0, 1_000_000_000.0 / avgNanos));
+                        return lastTps;
+                    }
+                }
+            } catch (Exception ignored) {}
+            if (mc.level == null) return lastTps;
             // Paused singleplayer advances no ticks while the clock runs -
             // freeze the display instead of tanking to 0. Clearing keeps the
             // post-resume reading clean (no dip from the paused span).

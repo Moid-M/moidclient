@@ -16,8 +16,13 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ambient.AmbientCreature;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.fish.WaterAnimal;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -117,11 +122,13 @@ public final class HitboxRenderer {
                         drawBox(context, box, cam, rgb[0], rgb[1], rgb[2], alpha, width);
 
                         if (mod.hitboxEyeLine && entity instanceof LivingEntity living) {
-                            Vec3 eyeTick = living.getEyePosition();
+                            // Anchor on the interpolated body position: getEyePosition()
+                            // is tick-current, so adding the partial offset again
+                            // overshoots (and Y never got one - jitter).
+                            double ex = ix;
+                            double ey = iy + living.getEyeHeight();
+                            double ez = iz;
                             Vec3 look = living.getLookAngle();
-                            double ex = eyeTick.x + (ix - entity.getX());
-                            double ey = eyeTick.y + (iy - entity.getY());
-                            double ez = eyeTick.z + (iz - entity.getZ());
                             drawSegment(context,
                                     ex, ey, ez,
                                     ex + look.x * eyeLen, ey + look.y * eyeLen, ez + look.z * eyeLen,
@@ -147,7 +154,12 @@ public final class HitboxRenderer {
         if (entity instanceof Enemy) {
             return mod.hitboxHostiles ? mod.hitboxHostilesColor : null;
         }
-        if (entity instanceof Animal) {
+        if (entity instanceof Animal
+                || entity instanceof Villager
+                || entity instanceof IronGolem
+                || entity instanceof SnowGolem
+                || entity instanceof AmbientCreature
+                || entity instanceof WaterAnimal) {
             return mod.hitboxPassives ? mod.hitboxPassivesColor : null;
         }
         return mod.hitboxOther ? mod.hitboxOtherColor : null;

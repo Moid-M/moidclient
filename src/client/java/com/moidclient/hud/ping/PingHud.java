@@ -58,6 +58,7 @@ public final class PingHud {
         if (scale <= 0) scale = 1.0;
 
         Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -119,6 +120,4 @@ public final class PingHud {
         else rgb = 0xEF4444;
         return (alpha << 24) | (rgb & 0xFFFFFF);
     }
-
-    // parseColor moved to ColorUtil.parseHex
 }

@@ -68,6 +68,7 @@ public final class SessionTimerHud {
         double scale = mod.scale;
         if (scale <= 0) scale = 1.0;
 
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;

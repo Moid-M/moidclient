@@ -66,6 +66,7 @@ public final class FpsHud {
         if (scale <= 0) scale = 1.0;
 
         Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -136,5 +137,4 @@ public final class FpsHud {
         return (alpha << 24) | (rgb & 0xFFFFFF);
     }
 
-    // parseColor -> ColorUtil.parseHex
 }

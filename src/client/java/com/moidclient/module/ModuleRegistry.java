@@ -17,9 +17,12 @@ import com.moidclient.hud.armor.ArmorStatusHud;
 import com.moidclient.hud.tps.TpsHud;
 import com.moidclient.utility.freelook.FreeLookManager;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
+import com.moidclient.utility.togglesneak.ToggleSneakManager;
+import com.moidclient.utility.togglesprint.ToggleSprintManager;
 import com.moidclient.utility.zoom.ZoomManager;
 import com.moidclient.visuals.blockoutline.BlockOutlineRenderer;
 import com.moidclient.visuals.hitboxes.HitboxRenderer;
+import com.moidclient.visuals.itemphysics.ItemPhysicsManager;
 import com.moidclient.visuals.fullbright.FullbrightManager;
 
 import java.util.ArrayList;
@@ -62,6 +65,9 @@ public final class ModuleRegistry {
         register(ZoomManager::definition, null);
         register(FreeLookManager::definition, null);
         register(HitboxRenderer::definition, null);
+        register(ToggleSprintManager::definition, null);
+        register(ToggleSneakManager::definition, null);
+        register(ItemPhysicsManager::definition, null);
     }
 
     /**

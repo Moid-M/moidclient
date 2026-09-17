@@ -134,6 +134,8 @@ public class ClientMod implements ClientModInitializer {
             try { FullbrightManager.onTick(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Fullbright tick failed", e); }
             try { com.moidclient.utility.zoom.ZoomManager.onTick(client, configManager, zoomKey); } catch (Exception e) { LOGGER.error("[MoidClient] Zoom tick failed", e); }
             try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager, freeLookKey); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }
+            try { com.moidclient.utility.togglesprint.ToggleSprintManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] ToggleSprint tick failed", e); }
+            try { com.moidclient.utility.togglesneak.ToggleSneakManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] ToggleSneak tick failed", e); }
             // reverse keybind sync (Controls -> dashboard), throttled 1s:
             // adopt live bindings changed in-game so the dashboard follows.
             if (++keySyncTick % 20 == 0) {

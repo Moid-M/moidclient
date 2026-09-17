@@ -30,6 +30,19 @@ public final class CpsHud {
     private static int peakRight = 0;
     private static long lastPeakReset = System.currentTimeMillis();
 
+    // Precompiled: these ran as String.replaceAll (recompiled per call) every frame.
+    private static final java.util.regex.Pattern SEP_RIGHT = java.util.regex.Pattern.compile("\\s*\\|\\s*\\{right\\}");
+    private static final java.util.regex.Pattern RIGHT_SEP = java.util.regex.Pattern.compile("\\{right\\}\\s*\\|\\s*");
+    private static final java.util.regex.Pattern SEP_LEFT = java.util.regex.Pattern.compile("\\s*\\|\\s*\\{left\\}");
+    private static final java.util.regex.Pattern LEFT_SEP = java.util.regex.Pattern.compile("\\{left\\}\\s*\\|\\s*");
+    private static final java.util.regex.Pattern DOUBLE_PIPE = java.util.regex.Pattern.compile("\\|\\s*\\|");
+    private static final java.util.regex.Pattern TRAIL_PIPE = java.util.regex.Pattern.compile("\\s*\\|\\s*$");
+    private static final java.util.regex.Pattern LEAD_PIPE = java.util.regex.Pattern.compile("^\\s*\\|\\s*");
+
+    private static String rep(String in, java.util.regex.Pattern p, String replacement) {
+        return p.matcher(in).replaceAll(replacement);
+    }
+
     private CpsHud() {}
 
     public static ModuleDef definition() {
@@ -135,6 +148,7 @@ public final class CpsHud {
         if (scale <= 0) scale = 1.0;
 
         Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -169,35 +183,36 @@ public final class CpsHud {
             else if ("right".equals(mode)) fmt = "CPS: {right}";
             else fmt = "CPS: {left} | {right}";
         }
-        // legacy migration: if format still contains {ping}
-        if (fmt.contains("{ping}")) {
-            if ("left".equals(mode)) fmt = "CPS: {left}";
-            else if ("right".equals(mode)) fmt = "CPS: {right}";
-            else fmt = "CPS: {left} | {right}";
-        }
+        // (Legacy {ping} migration lives in ConfigManager.fillMissingDefaults,
+        // applied once on load - not re-run every frame here.)
         // hide unused placeholder when mode is left/right (so Both shows "8 | 12", Left shows "8", Right shows "12")
         if ("left".equals(mode)) {
-            fmt = fmt.replaceAll("\\s*\\|\\s*\\{right\\}", "").replaceAll("\\{right\\}\\s*\\|\\s*", "").replace("{right}", "").replace("{r}", "");
-            fmt = fmt.replaceAll("\\|\\s*\\|", "|").replaceAll("\\s*\\|\\s*$", "").replaceAll("^\\s*\\|\\s*", "").trim();
+            fmt = rep(fmt, SEP_RIGHT, "");
+            fmt = rep(fmt, RIGHT_SEP, "");
+            fmt = fmt.replace("{right}", "").replace("{r}", "");
+            fmt = rep(rep(rep(fmt, DOUBLE_PIPE, "|"), TRAIL_PIPE, ""), LEAD_PIPE, "").trim();
             // clean up "CPS:  |" -> "CPS:"
-            fmt = fmt.replaceAll("\\s*\\|\\s*$", "").trim();
+            fmt = rep(fmt, TRAIL_PIPE, "").trim();
         } else if ("right".equals(mode)) {
-            fmt = fmt.replaceAll("\\s*\\|\\s*\\{left\\}", "").replaceAll("\\{left\\}\\s*\\|\\s*", "").replace("{left}", "").replace("{l}", "");
-            fmt = fmt.replaceAll("\\|\\s*\\|", "|").replaceAll("\\s*\\|\\s*$", "").replaceAll("^\\s*\\|\\s*", "").trim();
-            fmt = fmt.replaceAll("\\s*\\|\\s*$", "").trim();
+            fmt = rep(fmt, SEP_LEFT, "");
+            fmt = rep(fmt, LEFT_SEP, "");
+            fmt = fmt.replace("{left}", "").replace("{l}", "");
+            fmt = rep(rep(rep(fmt, DOUBLE_PIPE, "|"), TRAIL_PIPE, ""), LEAD_PIPE, "").trim();
+            fmt = rep(fmt, TRAIL_PIPE, "").trim();
         }
+        int side = "right".equals(mode) ? right : left;
         String text = fmt.replace("{left}", String.valueOf(left))
-                         .replace("{right}", String.valueOf(right))
-                         .replace("{cps}", String.valueOf(Math.max(left, right)))
+                          .replace("{right}", String.valueOf(right))
+                          .replace("{cps}", String.valueOf(Math.max(left, right)))
                           .replace("{peakLeft}", String.valueOf(peakLeft))
                           .replace("{peakRight}", String.valueOf(peakRight))
                           .replace("{peak}", String.valueOf(Math.max(peakLeft, peakRight)))
-                         .replace("{l}", String.valueOf(left))
-                         .replace("{r}", String.valueOf(right))
-                         .replace("{value}", String.valueOf(left))
-                         .replace("{ping}", String.valueOf(left));
+                          .replace("{l}", String.valueOf(left))
+                          .replace("{r}", String.valueOf(right))
+                          .replace("{value}", String.valueOf(side))
+                          .replace("{ping}", String.valueOf(side));
         // clean any leftover empty placeholders after mode filtering
-        text = text.replaceAll("\\s*\\|\\s*\\|", " | ").replaceAll("\\s*\\|\\s*$", "").trim();
+        text = rep(rep(text, DOUBLE_PIPE, " | "), TRAIL_PIPE, "").trim();
 
         // surprise: fire icon when bursting (>10) and peak tag
         boolean bursting = left > 10 || right > 10;

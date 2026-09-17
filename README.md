@@ -59,6 +59,9 @@ drift into the prose sections above.
 | Zoom | Utility | FOV zoom with scroll-adjust, cinematic mode, hold/toggle, rebindable | ✅ |
 | FreeLook | Utility | 360° camera + auto third-person, hold/toggle, rebindable | ✅ |
 | Custom Hitboxes | Visuals | Always-on entity hitboxes with per-group colors, eye lines | ✅ |
+| ToggleSprint | Utility | Uses the vanilla toggle-sprint setting while enabled | ✅ |
+| ToggleSneak | Utility | Uses the vanilla toggle-sneak setting while enabled | ✅ |
+| Item Physics | Visuals | Dropped items spin in air, lie flat on ground | ✅ |
 
 **Planned / in progress:**
 

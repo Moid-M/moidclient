@@ -246,6 +246,10 @@ function applyCanvasZoom(){
   const inp=document.querySelector('#canvasZoom');
   if(inp && document.activeElement!==inp) inp.value = canvasZoom;
 }
+// Editor geometry assumptions: pills are clamped so at least this many px stay
+// on-canvas (grabbable), and centering assumes this pill size (halved below).
+const EDITOR_EDGE_PAD=12;
+const EDITOR_CENTER_W=40, EDITOR_CENTER_H=20;
 function syncEditorItems(){
   try{
   applyCanvasZoom();
@@ -326,8 +330,8 @@ function syncEditorItems(){
     if(pv && pv.kind==='keystrokes' && mod.keystrokesOutline===false){
       el.style.borderColor='transparent';
     }
-    let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - 12));
-    let y=Math.max(0, Math.min(mod.y, windowSize.scaledHeight - 12));
+    let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - EDITOR_EDGE_PAD));
+    let y=Math.max(0, Math.min(mod.y, windowSize.scaledHeight - EDITOR_EDGE_PAD));
     el.style.left=(x * sx)+'px';
     el.style.top=(y * sy)+'px';
     if(editorSelectedId===id){ el.style.outline='2px solid var(--accent)'; el.style.outlineOffset='1px'; el.style.zIndex='2'; }
@@ -405,8 +409,8 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     if(!mod) return;
     let nx=Math.round(startModX+dx);
     let ny=Math.round(startModY+dy);
-    nx=Math.max(0, Math.min((windowSize.scaledWidth||640)-12, nx));
-    ny=Math.max(0, Math.min((windowSize.scaledHeight||360)-12, ny));
+    nx=Math.max(0, Math.min((windowSize.scaledWidth||640)-EDITOR_EDGE_PAD, nx));
+    ny=Math.max(0, Math.min((windowSize.scaledHeight||360)-EDITOR_EDGE_PAD, ny));
     mod.x=nx; mod.y=ny;
     dragEl.style.left=(nx*sx)+'px';
     dragEl.style.top=(ny*sy)+'px';
@@ -574,7 +578,11 @@ function setAccent(hex){
   $$('input[type="range"]').forEach(updateSliderFill);
 }
 function isLight(hex){
-  const c=hex.replace('#',''); const r=parseInt(c.substring(0,2),16), g=parseInt(c.substring(2,4),16), b=parseInt(c.substring(4,6),16);
+  let c=String(hex||'').trim(); if(c[0]==='#') c=c.slice(1);
+  if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+  if(c.length!==6) return false;
+  const r=parseInt(c.substring(0,2),16), g=parseInt(c.substring(2,4),16), b=parseInt(c.substring(4,6),16);
+  if(Number.isNaN(r+g+b)) return false;
   const l=(0.299*r+0.587*g+0.114*b)/255; return l>0.6;
 }
 function updateSliderFill(el){
@@ -582,7 +590,7 @@ function updateSliderFill(el){
   const pct=((val-min)/(max-min))*100;
   el.style.background=`linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border) ${pct}%, var(--border) 100%)`;
 }
-function escAttr(s){ return String(s ?? '').replace(/"/g, '&quot;'); }
+function escAttr(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const PICKER_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.31 0z"/><circle cx="12" cy="12" r="2.2"/></svg>`;
 function pickerPanelHtml(ck, withAlpha){
   return `<div class="picker-wrap" data-color-picker="${ck}">
@@ -1172,7 +1180,14 @@ function setConnection(state){
     showBanner(wsAttempts<=1 ? 'Connecting to Minecraft…' : 'Reconnecting to Minecraft…');
   }
 }
-function send(obj){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(obj)); }
+function send(obj){
+  const msg=JSON.stringify(obj);
+  if(ws&&ws.readyState===1){ ws.send(msg); return; }
+  // Offline: queue (cap 50, drop oldest) instead of silently losing the edit.
+  pendingOut.push(msg);
+  if(pendingOut.length>50) pendingOut.shift();
+}
+let pendingOut=[];
 function handleSync(data){
   if(data.accentColor) setAccent(data.accentColor);
   if(data.themeTextColor) setThemeText(data.themeTextColor);
@@ -1194,7 +1209,7 @@ function connect(){
   wsAttempts++;
   try{ if(ws && ws.readyState!==3) ws.close(); }catch(e){}
   const sock=ws=new WebSocket(url);
-  sock.onopen=()=>{ if(ws!==sock) return; setConnection(true); };
+  sock.onopen=()=>{ if(ws!==sock) return; setConnection(true); const q=pendingOut; pendingOut=[]; for(const m of q){ try{ if(ws===sock&&ws.readyState===1) ws.send(m); }catch(e){} } };
   sock.onclose=()=>{ if(ws!==sock) return; setConnection(false); if(reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer=setTimeout(connect,2000); };
   sock.onerror=()=>{ if(ws!==sock) return; setConnection(false); };
   sock.onmessage=ev=>{
@@ -1351,8 +1366,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   const centerBtn=document.querySelector('#editorCenterBtn');
   if(centerBtn) centerBtn.onclick=()=>{
     const targetId=getEditorTargetId(); if(!targetId) return;
-    const nx=Math.max(0, Math.round((windowSize.scaledWidth||640)/2)-20);
-    const ny=Math.max(0, Math.round((windowSize.scaledHeight||360)/2)-10);
+    const nx=Math.max(0, Math.round((windowSize.scaledWidth||640)/2)-EDITOR_CENTER_W/2);
+    const ny=Math.max(0, Math.round((windowSize.scaledHeight||360)/2)-EDITOR_CENTER_H/2);
     const mod=config.modules[targetId]=config.modules[targetId]||{x:10,y:10,scale:1,opacity:1,enabled:false};
     mod.x=nx; mod.y=ny;
     send({type:'UPDATE_MODULE', id:targetId, data:{x:nx, y:ny}}); syncEditorItem();

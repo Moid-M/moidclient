@@ -7,7 +7,9 @@
     "EntityMixin",
     "MouseScrollMixin",
     "CrosshairMixin",
-    "OptionsMixin"
+    "OptionsMixin",
+    "ItemEntityRendererMixin",
+    "ItemEntityRenderStateMixin"
   ],
   "injectors": {
     "defaultRequire": 1

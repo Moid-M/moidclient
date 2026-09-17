@@ -57,6 +57,26 @@ public final class ZoomManager {
     private static boolean smoothOut = true;
     private static double speed = 0.4;
     private static boolean accessorWarned = false;
+    // Cached option handles: resolving them walks reflection (methods, fields,
+    // superclass scans) - redo only when the options holder identity changes.
+    // A null handle is NOT cached, so a failed lookup keeps retrying.
+    private static Object lastOptions = null;
+    private static OptionAccess cachedFov = null;
+    private static OptionAccess cachedSens = null;
+
+    private static OptionAccess fovAccess(Object options) {
+        if (options == null) return null;
+        if (options != lastOptions) { lastOptions = options; cachedFov = null; cachedSens = null; }
+        if (cachedFov == null) cachedFov = OptionAccess.find(options, "fov", "getFov");
+        return cachedFov;
+    }
+
+    private static OptionAccess sensAccess(Object options) {
+        if (options == null) return null;
+        if (options != lastOptions) { lastOptions = options; cachedFov = null; cachedSens = null; }
+        if (cachedSens == null) cachedSens = OptionAccess.find(options, "sensitivity", "getSensitivity");
+        return cachedSens;
+    }
     // Scroll/cinematic state, refreshed every tick (mixins read these).
     private static boolean moduleEnabled = false;
     private static boolean scrollAdjust = true;
@@ -188,7 +208,7 @@ public final class ZoomManager {
             }
 
             double level = clampLevel(mod.zoomLevel <= 0 ? 4.0 : mod.zoomLevel);
-            OptionAccess fov = OptionAccess.find(mc.options, "fov", "getFov");
+            OptionAccess fov = fovAccess(mc.options);
             if (fov == null) {
                 if (!accessorWarned) {
                     accessorWarned = true;
@@ -216,7 +236,7 @@ public final class ZoomManager {
             animOut = false;
 
             if (mod.zoomLowerSensitivity) {
-                OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
+                OptionAccess sens = sensAccess(mc.options);
                 if (sens != null) {
                     if (originalSens < 0) originalSens = sens.getAsDouble();
                     sens.setFromDouble(Math.max(0.01, originalSens / level));
@@ -242,7 +262,7 @@ public final class ZoomManager {
         }
         try {
             if (mc != null && mc.options != null) {
-                OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
+                OptionAccess sens = sensAccess(mc.options);
                 if (sens != null) sens.setFromDouble(originalSens);
             }
         } catch (Exception e) {

@@ -82,6 +82,7 @@ public final class CoordinatesHud {
         int y = mod.y;
         double scale = mod.scale <= 0 ? 1.0 : mod.scale;
 
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;

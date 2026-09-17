@@ -7,6 +7,7 @@ import io.javalin.websocket.WsContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,6 +25,10 @@ public class NetworkPackets {
     private final ConfigManager config;
     private final Set<WsContext> sessions = ConcurrentHashMap.newKeySet();
     private volatile JsonObject lastWindowSize = null;
+    // Flood guard: sustained full-serialize + broadcast per message is cheap
+    // for a dashboard but not for a tight loop. Burst 30/s per session.
+    private static final int RATE_MAX_PER_SEC = 30;
+    private final Map<String, long[]> rateWindows = new ConcurrentHashMap<>();
 
     public NetworkPackets(ConfigManager config) {
         this.config = config;
@@ -43,6 +48,7 @@ public class NetworkPackets {
 
     public void onClose(WsContext ctx) {
         sessions.remove(ctx);
+        rateWindows.remove(ctx.sessionId());
         LOGGER.info("[MoidClient] WebSocket client disconnected: {}", ctx.sessionId());
     }
 
@@ -61,6 +67,10 @@ public class NetworkPackets {
                 LOGGER.warn("[MoidClient] WS {} too large ({}), dropped", type, message.length());
                 return;
             }
+            if (!"PING".equals(type) && !checkRate(ctx)) {
+                LOGGER.warn("[MoidClient] WS flood from {}, patch dropped", ctx.sessionId());
+                return;
+            }
 
             switch (type) {
                 case "UPDATE_MODULE" -> handleUpdateModule(json);
@@ -73,6 +83,21 @@ public class NetworkPackets {
             }
         } catch (Exception e) {
             LOGGER.error("[MoidClient] Failed to handle WS message ({} chars)", message.length(), e);
+        }
+    }
+
+    /** Fixed-window per-session throttle; bursty dashboards fit, tight loops don't. */
+    private boolean checkRate(WsContext ctx) {
+        long now = System.currentTimeMillis();
+        long[] slot = rateWindows.computeIfAbsent(ctx.sessionId(), k -> new long[]{now, 0});
+        synchronized (slot) {
+            if (now - slot[0] > 1000) {
+                slot[0] = now;
+                slot[1] = 0;
+            }
+            if (slot[1] >= RATE_MAX_PER_SEC) return false;
+            slot[1]++;
+            return true;
         }
     }
 
