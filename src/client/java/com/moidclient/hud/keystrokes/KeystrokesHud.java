@@ -188,15 +188,21 @@ public final class KeystrokesHud {
         int bg = 0;
         int textCol;
         if (pressed) {
-            // pressed uses pressedHex with full opacity
-            try { textCol = ColorUtil.parseHex(pressedHex, opacity); } catch (Exception e) { textCol = ColorUtil.parseHex("#FFFFFF", opacity); }
+            // pressed bg uses pressedHex; text contrasts against it (white)
+            // so the label stays readable on the highlight.
             if (bgEnabled) {
                 try { bg = ColorUtil.parseHex(pressedHex, bgOpacity); } catch (Exception e) { bg = ColorUtil.parseHex("#FFFFFF", bgOpacity); }
                 // slightly dim bg for pressed
                 bg = (bg & 0x00FFFFFF) | ((int)(bgOpacity * 255) << 24);
                 g.fill(x, y, x + w, y + h, bg);
+                if (textColor != null && !textColor.isEmpty()) {
+                    try { textCol = ColorUtil.parseHex(textColor, opacity); } catch (Exception e) { textCol = ColorUtil.parseHex("#FFFFFF", opacity); }
+                } else {
+                    textCol = ColorUtil.parseHex("#FFFFFF", opacity);
+                }
             } else {
                 // no bg, just text color change
+                try { textCol = ColorUtil.parseHex(pressedHex, opacity); } catch (Exception e) { textCol = ColorUtil.parseHex("#FFFFFF", opacity); }
             }
         } else {
             if (bgEnabled) {

@@ -11,7 +11,9 @@
     "ItemEntityRendererMixin",
     "ItemEntityRenderStateMixin",
     "AutohideMixin",
-    "TelemetryMixin"
+    "TelemetryMixin",
+    "ChatStackMixin",
+    "ChatComponentAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

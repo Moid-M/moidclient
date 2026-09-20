@@ -47,15 +47,17 @@ public final class ZoomManager {
                 ));
     }
 
-    private static double baseFov = -1;
-    private static double targetFov = -1;
-    private static double currentFov = -1;
-    private static double originalSens = -1;
-    private static boolean held = false;
-    private static boolean animOut = false;
-    private static boolean smoothIn = true;
-    private static boolean smoothOut = true;
-    private static double speed = 0.4;
+    // Tick thread writes, render thread (CameraMixin) reads: volatile for
+    // visibility (double tearing would corrupt the FOV mid-frame).
+    private static volatile double baseFov = -1;
+    private static volatile double targetFov = -1;
+    private static volatile double currentFov = -1;
+    private static volatile double originalSens = -1;
+    private static volatile boolean held = false;
+    private static volatile boolean animOut = false;
+    private static volatile boolean smoothIn = true;
+    private static volatile boolean smoothOut = true;
+    private static volatile double speed = 0.4;
     private static boolean accessorWarned = false;
     // Cached option handles: resolving them walks reflection (methods, fields,
     // superclass scans) - redo only when the options holder identity changes.
@@ -78,13 +80,13 @@ public final class ZoomManager {
         return cachedSens;
     }
     // Scroll/cinematic state, refreshed every tick (mixins read these).
-    private static boolean moduleEnabled = false;
-    private static boolean scrollAdjust = true;
-    private static double scrollStep = 1.0;
-    private static double minLevel = 1.5;
-    private static double maxLevel = 10.0;
-    private static boolean cinematic = false;
-    private static boolean levelDirty = false;
+    private static volatile boolean moduleEnabled = false;
+    private static volatile boolean scrollAdjust = true;
+    private static volatile double scrollStep = 1.0;
+    private static volatile double minLevel = 1.5;
+    private static volatile double maxLevel = 10.0;
+    private static volatile boolean cinematic = false;
+    private static volatile boolean levelDirty = false;
     private static ConfigManager.ModuleConfig lastMod = null;
 
     /**

@@ -42,6 +42,8 @@ public class ClientMod implements ClientModInitializer {
     private int windowTick=0;
     private int liveTick=0;
     private int keySyncTick=0;
+    private int statsTick=0;
+    private com.moidclient.stats.StatsRecorder statsRecorder;
 
     @Override
     public void onInitializeClient() {
@@ -50,6 +52,7 @@ public class ClientMod implements ClientModInitializer {
 
         // 1) Config + schema defaults declared in module definitions
         configManager = new ConfigManager();
+        try { statsRecorder = new com.moidclient.stats.StatsRecorder(); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init stats", e); }
         try { ModuleRegistry.applyOptionDefaults(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to apply option defaults", e); }
         networkPackets = new NetworkPackets(configManager);
         // 1b) HUD (ping display etc) - register before server
@@ -58,7 +61,7 @@ public class ClientMod implements ClientModInitializer {
         try { HitboxRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Hitboxes", e); }
 
         // 2) Server (dynamic port binding + asset serving + WS)
-        serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson);
+        serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson, statsRecorder);
         try {
             serverManager.start();
         } catch (Exception e) {
@@ -109,6 +112,23 @@ public class ClientMod implements ClientModInitializer {
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             try { PerspectiveSkipManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] PerspectiveSkip tick failed", e); }
         });
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            try { if (statsRecorder != null) statsRecorder.saveAndClose(); } catch (Exception ignored) {}
+        });
+
+        // Combat hook (combo/reach HUDs): Fabric attack event, client side.
+        // Returning PASS never interferes - we only observe.
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            try {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc != null && player != null && player == mc.player && entity != null) {
+                    net.minecraft.world.phys.Vec3 eye = player.getEyePosition();
+                    net.minecraft.world.phys.Vec3 hit = hitResult != null ? hitResult.getLocation() : entity.position();
+                    com.moidclient.hud.combat.CombatTracker.onAttack(eye.distanceTo(hit));
+                }
+            } catch (Exception ignored) {}
+            return net.minecraft.world.InteractionResult.PASS;
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (openGuiKey != null) while (openGuiKey.consumeClick()) {
@@ -131,6 +151,35 @@ public class ClientMod implements ClientModInitializer {
             }
             // cps tracking (every tick) with logging
             try { CpsHud.onTick(); } catch (Exception e) { LOGGER.error("[MoidClient] Cps tick failed", e); }
+            try { com.moidclient.hud.combat.CombatTracker.onTick(client); } catch (Exception e) { LOGGER.error("[MoidClient] Combat tick failed", e); }
+            // stats history (1Hz): record locally even with no dashboard open
+            if (++statsTick % 20 == 0) {
+                try {
+                    var statMod = configManager.getModule("statistics");
+                    if (statMod != null && statMod.enabled && statsRecorder != null) {
+                        int ping = 0, fps = 0;
+                        double tps = 20.0;
+                        try { ping = HudManager.getCurrentPing(); } catch (Exception ignored) {}
+                        try { fps = HudManager.getCurrentFps(); } catch (Exception ignored) {}
+                        try { tps = com.moidclient.hud.tps.TpsHud.getCurrentTps(); } catch (Exception ignored) {}
+                        long mem = 0;
+                        try {
+                            Runtime rt = Runtime.getRuntime();
+                            mem = (rt.totalMemory() - rt.freeMemory()) / 1024 / 1024;
+                        } catch (Exception ignored) {}
+                        statsRecorder.recordSample(fps, ping, tps, mem);
+                        String label = null;
+                        try {
+                            if (client != null && (client.level != null || client.getConnection() != null)) {
+                                label = com.moidclient.hud.server.ServerHud.currentAddress();
+                            }
+                            statsRecorder.noteContext(client != null ? client.level : null,
+                                    client != null ? client.getConnection() : null, label);
+                        } catch (Exception ignored) {}
+                        statsRecorder.maybeSave();
+                    }
+                } catch (Exception e) { LOGGER.error("[MoidClient] Stats tick failed", e); }
+            }
             try { FullbrightManager.onTick(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Fullbright tick failed", e); }
             try { com.moidclient.utility.zoom.ZoomManager.onTick(client, configManager, zoomKey); } catch (Exception e) { LOGGER.error("[MoidClient] Zoom tick failed", e); }
             try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager, freeLookKey); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }

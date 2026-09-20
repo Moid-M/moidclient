@@ -4,6 +4,7 @@ import com.moidclient.config.ConfigManager;
 import com.moidclient.module.ModuleDef;
 import com.moidclient.module.ModuleOption;
 import com.moidclient.util.ScreenUtil;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
@@ -23,12 +24,16 @@ public final class AutohideManager {
     /** Hide/show sweep duration at speed 1. */
     private static final long ANIM_MS = 250;
 
-    private static boolean targetShown = true;
-    private static long transitionStartMs = 0;
-    private static float fromAmount = 0f;
-    private static long lastActivityMs = 0;
-    private static int lastSelectedSlot = -1;
-    private static long animMs = ANIM_MS;
+    // Tick thread writes, render thread (AutohideMixin) reads.
+    private static volatile boolean targetShown = true;
+    private static volatile long transitionStartMs = 0;
+    private static volatile float fromAmount = 0f;
+    private static volatile long lastActivityMs = 0;
+    private static volatile int lastSelectedSlot = -1;
+    private static volatile long animMs = ANIM_MS;
+    private static volatile boolean wasEnabled = false;
+    /** True while a pushTransform push is awaiting its paired pop. */
+    private static boolean transformPushed = false;
 
     public static ModuleDef definition() {
         return new ModuleDef("autohideHud", "Autohide HUD",
@@ -50,7 +55,18 @@ public final class AutohideManager {
             ConfigManager.ModuleConfig mod = config != null ? config.getModule("autohideHud") : null;
             if (mc == null || mod == null || !mod.enabled || mc.player == null) {
                 noteShown();
+                wasEnabled = false;
                 return;
+            }
+            long now = System.currentTimeMillis();
+            if (!wasEnabled || lastActivityMs == 0) {
+                // freshly enabled: start the idle clock now instead of
+                // hiding instantly on the first tick (lastActivityMs = 0).
+                wasEnabled = true;
+                lastActivityMs = now;
+                targetShown = true;
+                fromAmount = 0f;
+                transitionStartMs = now;
             }
             boolean ignoreMovement = false;
             double speed = 1.0;
@@ -62,18 +78,21 @@ public final class AutohideManager {
             animMs = (long) (ANIM_MS / Math.max(0.1, Math.min(8.0, speed)));
             // With ignore-movement only hotbar use (slot changes) and open
             // screens wake the HUD; walking and clicking do not.
+            // Vanilla bindings (not raw keys): rebounds, ESDF/arrow layouts,
+            // sprint-on-Ctrl and controllers all wake the HUD correctly.
             boolean active = ScreenUtil.isScreenOpen(mc);
             if (!ignoreMovement) {
+                var opts = mc.options;
                 active = active
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_W)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_A)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_S)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_D)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_SPACE)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_SHIFT)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_LEFT)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_RIGHT)
-                        || com.moidclient.utility.keybind.NativeKeys.isDown(mc, com.moidclient.utility.keybind.NativeKeys.GLFW_MOUSE_MIDDLE);
+                        || isDownSafe(opts != null ? opts.keyUp : null)
+                        || isDownSafe(opts != null ? opts.keyDown : null)
+                        || isDownSafe(opts != null ? opts.keyLeft : null)
+                        || isDownSafe(opts != null ? opts.keyRight : null)
+                        || isDownSafe(opts != null ? opts.keyJump : null)
+                        || isDownSafe(opts != null ? opts.keyShift : null)
+                        || isDownSafe(opts != null ? opts.keyAttack : null)
+                        || isDownSafe(opts != null ? opts.keyUse : null)
+                        || isDownSafe(opts != null ? opts.keyPickItem : null);
             }
             try {
                 int selected = mc.player.getInventory().getSelectedSlot();
@@ -83,7 +102,7 @@ public final class AutohideManager {
                     active = true;
                 }
             } catch (Exception ignored) {}
-            long now = System.currentTimeMillis();
+            now = System.currentTimeMillis();
             if (active) lastActivityMs = now;
             double timeout = 3.0;
             try {
@@ -120,12 +139,23 @@ public final class AutohideManager {
         targetShown = true;
         fromAmount = 0f;
         transitionStartMs = System.currentTimeMillis();
+        lastActivityMs = transitionStartMs;
+    }
+
+    /** Null-safe vanilla binding poll (rebound/controller aware). */
+    private static boolean isDownSafe(KeyMapping mapping) {
+        try {
+            return mapping != null && mapping.isDown();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** Pushes the current hide transform (always balanced by popTransform). */
     public static void pushTransform(GuiGraphicsExtractor graphics) {
         try {
             graphics.pose().pushMatrix();
+            transformPushed = true;
         } catch (Exception ignored) {
             return;
         }
@@ -174,8 +204,10 @@ public final class AutohideManager {
         } catch (Exception ignored) {}
     }
 
-    /** Pops what pushTransform pushed (always paired, even when identity). */
+    /** Pops what pushTransform pushed (skips if the push never happened). */
     public static void popTransform(GuiGraphicsExtractor graphics) {
+        if (!transformPushed) return;
+        transformPushed = false;
         try {
             graphics.pose().popMatrix();
         } catch (Exception ignored) {}

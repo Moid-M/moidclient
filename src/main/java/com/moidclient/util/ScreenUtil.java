@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
 public final class ScreenUtil {
     private ScreenUtil() {}
 
-    private static int mode = 0; // 0 = unknown, 1 = mc.screen, 2 = gui.screen()
+    private static volatile int mode = 0; // 0 = unknown, 1 = mc.screen, 2 = gui.screen()
     private static Field mcScreenField = null;
     private static Field guiField = null;
     private static Method guiScreenMethod = null;

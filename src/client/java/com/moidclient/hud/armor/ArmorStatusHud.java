@@ -243,11 +243,13 @@ public final class ArmorStatusHud {
 
     private static int rowColor(ConfigManager.ModuleConfig mod, ItemStack stack) {
         double frac = durabilityFraction(stack);
-        if (mod.armorDynamicColor && frac >= 0) {
-            return healthColor(frac, mod.opacity);
-        }
+        // low-durability warning wins over the gradient so it stays visible
+        // when both options are on.
         if (mod.armorLowWarn && frac >= 0 && frac < 0.1) {
             return ColorUtil.parseHex("#EF4444", mod.opacity);
+        }
+        if (mod.armorDynamicColor && frac >= 0) {
+            return healthColor(frac, mod.opacity);
         }
         if (mod.textColor != null && !mod.textColor.isEmpty()) {
             try { return ColorUtil.parseHex(mod.textColor, mod.opacity); } catch (Exception e) { /* fall through */ }

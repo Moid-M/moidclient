@@ -2,6 +2,7 @@ package com.moidclient.server;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.network.NetworkPackets;
+import com.moidclient.stats.StatsRecorder;
 import io.javalin.Javalin;
 import io.javalin.http.staticfiles.Location;
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ public class ServerManager {
     private final ConfigManager config;
     private final NetworkPackets network;
     private final Supplier<com.google.gson.JsonElement> moduleDefs;
+    private final StatsRecorder stats;
     private Javalin app;
     private int activePort = -1;
 
@@ -29,9 +31,15 @@ public class ServerManager {
     }
 
     public ServerManager(ConfigManager config, NetworkPackets network, Supplier<com.google.gson.JsonElement> moduleDefs) {
+        this(config, network, moduleDefs, null);
+    }
+
+    public ServerManager(ConfigManager config, NetworkPackets network, Supplier<com.google.gson.JsonElement> moduleDefs,
+                         StatsRecorder stats) {
         this.config = config;
         this.network = network;
         this.moduleDefs = moduleDefs;
+        this.stats = stats;
     }
 
     public int getActivePort() {
@@ -104,11 +112,26 @@ public class ServerManager {
           })
           .get("/api/port", ctx -> ctx.result(String.valueOf(port)))
           .get("/api/health", ctx -> ctx.json(java.util.Map.of("status", "ok", "port", port)))
+          .get("/api/stats", ctx -> {
+              try {
+                  com.google.gson.JsonObject history = stats != null ? stats.toJson() : null;
+                  ctx.contentType("application/json").result(history != null ? history.toString() : "{\"sessions\":[]}");
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"sessions\":[]}");
+              }
+          })
+          .post("/api/stats/clear", ctx -> {
+              try {
+                  if (stats != null) stats.clear();
+                  ctx.result("ok");
+              } catch (Exception e) {
+                  ctx.status(500).result("err");
+              }
+          })
           .post("/api/log", ctx -> {
               try {
                   String body = ctx.body();
-                  if (body.length() > 10000) body = body.substring(0, 10000) + "...(truncated)";
-                  // truncate to 2000 chars to avoid log spam
+                  // single truncate to 2000 chars to avoid log spam
                   String logBody = body.length() > 2000 ? body.substring(0, 2000) + "..." : body;
                   LOGGER.info("[MoidClient][Web] {}", logBody);
                   ctx.status(200).result("ok");

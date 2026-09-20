@@ -290,14 +290,23 @@ public class ConfigManager {
         registerDefault("sessionTimer", new ModuleConfig(false, 10, 190), overwrite);
         registerDefault("potionEffects", new ModuleConfig(false, 10, 210), overwrite);
         registerDefault("armorStatus", new ModuleConfig(false, 10, 230), overwrite);
+        registerDefault("comboCounter", new ModuleConfig(false, 10, 250), overwrite);
+        registerDefault("reachDisplay", new ModuleConfig(false, 10, 270), overwrite);
+        registerDefault("memoryUsage", new ModuleConfig(false, 10, 290), overwrite);
+        registerDefault("toggleSprint", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("toggleSneak", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("itemPhysics", new ModuleConfig(false, 0, 0), overwrite);
+        registerDefault("autohideHud", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("zoom", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("freelook", new ModuleConfig(false, 0, 0), overwrite);
         registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
-        // telemetryBlock ships ON: never overwrite an existing choice.
+        registerDefault("chatStack", new ModuleConfig(false, 0, 0), overwrite);
+        // telemetryBlock + statistics ship ON: never overwrite an existing choice.
         registerDefault("telemetryBlock", new ModuleConfig(true, 0, 0), false);
+        registerDefault("statistics", new ModuleConfig(true, 0, 0), false);
         // removed: testModule, fpsBoost (not implemented)
     }
 

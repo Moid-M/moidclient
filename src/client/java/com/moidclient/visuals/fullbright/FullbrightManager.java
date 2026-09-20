@@ -52,7 +52,8 @@ public final class FullbrightManager {
             var opt = mc.options.gamma();
             if (fb != null && fb.enabled) {
                 double target = fb.fullbrightGamma;
-                if (target < 1) target = 12; if (target > 15) target = 15;
+                if (Double.isNaN(target)) target = 12;
+                if (target < 1) target = 1; if (target > 15) target = 15;
                 if (originalGamma < 0) originalGamma = opt.get();
                 boolean setDirect = false;
                 Field f = valueFieldOf(opt);

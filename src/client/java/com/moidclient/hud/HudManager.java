@@ -12,6 +12,9 @@ import com.moidclient.hud.server.ServerHud;
 import com.moidclient.hud.session.SessionTimerHud;
 import com.moidclient.hud.potions.PotionEffectsHud;
 import com.moidclient.hud.armor.ArmorStatusHud;
+import com.moidclient.hud.combo.ComboHud;
+import com.moidclient.hud.memory.MemoryHud;
+import com.moidclient.hud.reach.ReachHud;
 import com.moidclient.hud.tps.TpsHud;
 import net.minecraft.resources.Identifier;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -39,6 +42,9 @@ public final class HudManager {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "session_hud"), (graphics, deltaTracker) -> SessionTimerHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "potions_hud"), (graphics, deltaTracker) -> PotionEffectsHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "armor_hud"), (graphics, deltaTracker) -> ArmorStatusHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "combo_hud"), (graphics, deltaTracker) -> ComboHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "reach_hud"), (graphics, deltaTracker) -> ReachHud.render(graphics, deltaTracker, config));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "memory_hud"), (graphics, deltaTracker) -> MemoryHud.render(graphics, deltaTracker, config));
     }
 
     public static int getCurrentPing() { return PingHud.getCurrentPing(); }

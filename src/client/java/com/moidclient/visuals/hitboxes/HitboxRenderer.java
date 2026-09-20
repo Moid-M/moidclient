@@ -63,7 +63,9 @@ public final class HitboxRenderer {
             ));
     }
 
-    private static int frameCounter = 0;
+    // long: an int counter overflows to negative after ~2B frames and would
+    // then skip rendering essentially forever (negative % skip != 0).
+    private static long frameCounter = 0;
     private static volatile long lastTickMs = 0;
 
     public static void register(ConfigManager config) {
@@ -116,9 +118,10 @@ public final class HitboxRenderer {
                         AABB shape = entity.getBoundingBox();
                         double w = shape.maxX - shape.minX + padding * 2;
                         double h = shape.maxY - shape.minY + padding * 2;
+                        double d = shape.maxZ - shape.minZ + padding * 2;
                         AABB box = new AABB(
-                                ix - w / 2, iy - padding, iz - w / 2,
-                                ix + w / 2, iy - padding + h, iz + w / 2);
+                                ix - w / 2, iy - padding, iz - d / 2,
+                                ix + w / 2, iy - padding + h, iz + d / 2);
                         drawBox(context, box, cam, rgb[0], rgb[1], rgb[2], alpha, width);
 
                         if (mod.hitboxEyeLine && entity instanceof LivingEntity living) {

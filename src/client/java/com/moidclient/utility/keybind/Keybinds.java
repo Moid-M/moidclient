@@ -39,8 +39,11 @@ public final class Keybinds {
             if (last != null && last == code) return;
             int nativeCode = NativeKeys.toNative(code);
             int live = KeybindUtil.readCode(mapping);
+            // Transient read failure: record nothing so the push is retried
+            // next tick instead of being suppressed forever.
+            if (live < 0) return;
             LAST_PUSHED.put(mapping, code);
-            if (live < 0 || live == nativeCode) return;
+            if (live == nativeCode) return;
             mapping.setKey(NativeKeys.keyType().getOrCreate(nativeCode));
             try { KeyMapping.resetMapping(); } catch (Exception ignored) {}
             try { mc.options.save(); } catch (Exception ignored) {}

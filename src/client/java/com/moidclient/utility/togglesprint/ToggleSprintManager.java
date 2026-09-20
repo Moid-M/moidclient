@@ -27,10 +27,18 @@ public final class ToggleSprintManager {
 
     public static void onTick(Minecraft mc, ConfigManager config) {
         try {
-            ConfigManager.ModuleConfig mod = config != null ? config.getModule("toggleSprint") : null;
-            if (mc == null || mc.options == null || mod == null) return;
+            if (mc == null || mc.options == null) return;
             var toggle = mc.options.toggleSprint();
             if (toggle == null) return;
+            ConfigManager.ModuleConfig mod = config != null ? config.getModule("toggleSprint") : null;
+            if (mod == null) {
+                // config wiped mid-session: never leave vanilla stuck on.
+                if (enforced) {
+                    enforced = false;
+                    toggle.set(savedValue);
+                }
+                return;
+            }
             if (mod.enabled) {
                 if (!enforced) {
                     enforced = true;

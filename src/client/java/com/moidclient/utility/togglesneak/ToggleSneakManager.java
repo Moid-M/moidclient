@@ -26,10 +26,18 @@ public final class ToggleSneakManager {
 
     public static void onTick(Minecraft mc, ConfigManager config) {
         try {
-            ConfigManager.ModuleConfig mod = config != null ? config.getModule("toggleSneak") : null;
-            if (mc == null || mc.options == null || mod == null) return;
+            if (mc == null || mc.options == null) return;
             var toggle = mc.options.toggleCrouch();
             if (toggle == null) return;
+            ConfigManager.ModuleConfig mod = config != null ? config.getModule("toggleSneak") : null;
+            if (mod == null) {
+                // config wiped mid-session: never leave vanilla stuck on.
+                if (enforced) {
+                    enforced = false;
+                    toggle.set(savedValue);
+                }
+                return;
+            }
             if (mod.enabled) {
                 if (!enforced) {
                     enforced = true;

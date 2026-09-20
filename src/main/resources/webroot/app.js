@@ -1,5 +1,5 @@
 ﻿// Moid Client - HUD Editor + inline pickers, center fix, drag fix, no X/Y in card
-const MOID_APP_VERSION='1.1.0-dev2';
+const MOID_APP_VERSION='1.4.0';
 console.log('[MoidClient] app.js '+MOID_APP_VERSION);
 // Generic icon library keyed by icon NAME (from each module's definition()).
 // No module ids here - iconFor() resolves via the served metadata.
@@ -230,6 +230,9 @@ function samplePreview(id){
     case 'sessionTimer': return {text:'Session: 12:34', kind:'text'};
     case 'potionEffects': return {text:'Speed II 3:24\nRegeneration 0:42', kind:'effects'};
     case 'armorStatus': return {text:'No armor equipped', kind:'effects'};
+    case 'comboCounter': return {text:'Combo: 3', kind:'text'};
+    case 'reachDisplay': return {text:'Reach: 3.20', kind:'text'};
+    case 'memoryUsage': return {text:'Memory: 1024 MB', kind:'text'};
     default: return null;
   }
 }
@@ -354,6 +357,13 @@ function syncEditorItems(){
     el.style.top=(y * sy)+'px';
     if(editorSelectedId===id){ el.style.outline='2px solid var(--accent)'; el.style.outlineOffset='1px'; el.style.zIndex='2'; }
     box.appendChild(el);
+    // Re-clamp with the pill's real size so large pills keep 12px grabbable.
+    try{
+      const apw=(el.offsetWidth/(sx||1))||0, aph=(el.offsetHeight/(sy||1))||0;
+      const cx=Math.max(EDITOR_EDGE_PAD-apw, Math.min(mod.x, windowSize.scaledWidth-EDITOR_EDGE_PAD));
+      const cy=Math.max(EDITOR_EDGE_PAD-aph, Math.min(mod.y, windowSize.scaledHeight-EDITOR_EDGE_PAD));
+      el.style.left=(cx*sx)+'px'; el.style.top=(cy*sy)+'px';
+    }catch(e){}
   });
   if(!idsToShow.length){
     const hint=document.createElement('div');
@@ -391,6 +401,10 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
   if(main && !outers.includes(main)) outers.unshift(main);
   if(!outers.length) return;
   for(const outer of outers){
+  // Idempotent: render() injects the All-tab canvas after boot, so this runs
+  // again — never double-bind listeners on an already-bound canvas.
+  if(outer.dataset.moidDragBound) continue;
+  outer.dataset.moidDragBound='1';
   let dragging=false, dragId=null, startX=0, startY=0, startModX=0, startModY=0, dragEl=null;
   let lastDragSend=0;
   outer.addEventListener('pointerdown', e=>{
@@ -427,8 +441,10 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     if(!mod) return;
     let nx=Math.round(startModX+dx);
     let ny=Math.round(startModY+dy);
-    nx=Math.max(0, Math.min((windowSize.scaledWidth||640)-EDITOR_EDGE_PAD, nx));
-    ny=Math.max(0, Math.min((windowSize.scaledHeight||360)-EDITOR_EDGE_PAD, ny));
+    // Keep at least EDITOR_EDGE_PAD px grabbable using the pill's own size.
+    const pw=(dragEl.offsetWidth/(sx||1))||0, ph=(dragEl.offsetHeight/(sy||1))||0;
+    nx=Math.max(EDITOR_EDGE_PAD-pw, Math.min((windowSize.scaledWidth||640)-EDITOR_EDGE_PAD, nx));
+    ny=Math.max(EDITOR_EDGE_PAD-ph, Math.min((windowSize.scaledHeight||360)-EDITOR_EDGE_PAD, ny));
     mod.x=nx; mod.y=ny;
     dragEl.style.left=(nx*sx)+'px';
     dragEl.style.top=(ny*sy)+'px';
@@ -636,7 +652,7 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
 }
 // GLFW key codes <-> display names for the "keybind" option type.
 // Values are polled in-game via GLFW directly, so any keyboard key works.
-const GLFW_KEY_NAMES = {0:'Mouse Left',1:'Mouse Right',2:'Mouse Middle',32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
+const GLFW_KEY_NAMES = {0:'Mouse Left',1:'Mouse Right',2:'Mouse Middle',32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',39:"'",290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
 for(let c=48;c<=57;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
 for(let c=65;c<=90;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
 function keyName(code){ return GLFW_KEY_NAMES[code] || ('Key ' + code); }
@@ -855,6 +871,8 @@ function render(animate=false){
         try{ localStorage.setItem('cc_cat_'+cat, willOpen?'0':'1'); }catch(e){}
       };
     });
+    // The All-tab mini editor is injected above after boot bindings ran.
+    setupEditorDrag();
     const allCountEl=document.querySelector('#allCount'); if(allCountEl) allCountEl.textContent=allIdsAll.length;
     const noRes=document.querySelector('#noResults'); if(noRes) noRes.classList.toggle('hidden', allIdsAll.length>0);
   }
@@ -895,10 +913,11 @@ function render(animate=false){
       const cur=config.modules[id]||{};
       const meta=MODULES_META[id];
       const patch={};
-      for(const k of ['x','y','scale','opacity']) if(k in cur) patch[k]={x:10,y:10,scale:1,opacity:1}[k];
+      // Geometry always resets even when never positioned before.
+      for(const k of ['x','y','scale','opacity']) patch[k]={x:10,y:10,scale:1,opacity:1}[k];
       // Plus every declared option default (geometry keys have none, covered above).
       if(meta&&meta.options) for(const o of meta.options){
-        if(o&&o.default!==undefined&&o.default!==null&&(o.key in cur)) patch[o.key]=o.default;
+        if(o&&o.default!==undefined&&o.default!==null) patch[o.key]=o.default;
       }
       if(!Object.keys(patch).length) return;
       send({type:'UPDATE_MODULE',id,data:patch});
@@ -1238,11 +1257,206 @@ function connect(){
     try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); if(msg.type==='LIVE_STATS') handleLiveStats(msg.data); }catch(e){ console.error(e); }
   };
 }
+// ---- Statistics tab: local performance history charts ----
+let statsCache=null, statsSessionId='live';
+function statsSessionList(){
+  try{ return (statsCache&&statsCache.sessions)||[]; }catch(e){ return []; }
+}
+function statsCurrentSessionId(){
+  try{
+    const arr=statsSessionList();
+    for(let i=arr.length-1;i>=0;i--){ if(!arr[i].endedAt) return arr[i].id; }
+    if(arr.length) return arr[arr.length-1].id;
+  }catch(e){}
+  return null;
+}
+async function loadStats(){
+  try{
+    const r=await fetch('/api/stats');
+    if(!r.ok) return;
+    statsCache=await r.json();
+  }catch(e){ return; }
+  try{
+    const sel=document.querySelector('#statsSession');
+    const sessions=statsSessionList();
+    if(sel){
+      const cur=sel.value;
+      sel.innerHTML='';
+      const optLive=document.createElement('option');
+      optLive.value='live'; optLive.textContent='Live session';
+      sel.appendChild(optLive);
+      for(const s of sessions.slice().reverse()){
+        const o=document.createElement('option');
+        o.value=s.id;
+        const d=new Date(s.startedAt);
+        const dur=s.endedAt?Math.max(0,Math.round((s.endedAt-s.startedAt)/1000)):null;
+        o.textContent=d.toLocaleString()+(dur!=null?(' · '+Math.floor(dur/60)+':'+String(dur%60).padStart(2,'0')):' · live');
+        sel.appendChild(o);
+      }
+      if(cur==='live'||!cur) sel.value='live';
+      else if(sessions.some(s=>s.id===cur)) sel.value=cur;
+      else sel.value='live';
+      statsSessionId=sel.value;
+    }
+    renderStats();
+  }catch(e){ console.error(e); }
+}
+function statsActiveSession(){
+  try{
+    const sessions=statsSessionList(); if(!sessions.length) return null;
+    if(statsSessionId&&statsSessionId!=='live'){
+      const found=sessions.find(s=>s.id===statsSessionId);
+      if(found) return found;
+    }
+    const live=statsCurrentSessionId();
+    if(live){ const f=sessions.find(s=>s.id===live); if(f) return f; }
+    return sessions[sessions.length-1];
+  }catch(e){ return null; }
+}
+function fmtTime(t){ try{ return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }catch(e){ return ''; } }
+let statsWindowSec=(()=>{ const v=parseInt(localStorage.getItem('cc_statsWindow')||'300'); return Number.isNaN(v)?300:v; })();
+function renderStats(){
+  const s=statsActiveSession();
+  const allSamples=(s&&s.samples)||[];
+  const allEvents=(s&&s.events)||[];
+  // Display window: trailing slice so long sessions don't cram.
+  let samples=allSamples, events=allEvents;
+  if(statsWindowSec>0 && allSamples.length){
+    const endT=s.endedAt?s.endedAt:Date.now();
+    const fromT=endT-statsWindowSec*1000;
+    samples=allSamples.filter(p=>p.t>=fromT);
+    events=allEvents.filter(e=>e.t>=fromT);
+  }
+  drawStatChart('statFps', 'statFpsVal', 'FPS', samples, p=>p.fps, v=>String(Math.round(v)), '#22C55E', events);
+  drawStatChart('statPing', 'statPingVal', 'Ping', samples, p=>p.ping, v=>Math.round(v)+' ms', '#38BDF8', events);
+  drawStatChart('statTps', 'statTpsVal', 'TPS', samples, p=>p.tps, v=>(Math.round(v*10)/10).toFixed(1), '#EAB308', events);
+  drawStatChart('statMem', 'statMemVal', 'Memory', samples, p=>p.mem, v=>Math.round(v)+' MB', '#A78BFA', events);
+  const info=document.querySelector('#statsInfo');
+  if(info){
+    if(!s){ info.textContent='No data yet — play a little, then reopen this tab.'; }
+    else{
+      const n=samples.length;
+      const ev=events.length;
+      const win=statsWindowSec>0?(' · last '+statsWindowLabel()):' · full session';
+      info.textContent=ev+' events · '+n+' samples'+(!s.endedAt?' · live':'')+win;
+    }
+  }
+  try{
+    const se=document.querySelector('#statsEnabled');
+    if(se && document.activeElement!==se){
+      const m=config.modules&&config.modules.statistics;
+      se.checked=m?!!m.enabled:true;
+    }
+    const sw=document.querySelector('#statsWindow');
+    if(sw && document.activeElement!==sw) sw.value=String(statsWindowSec);
+  }catch(e){}
+}
+function statsWindowLabel(){
+  if(statsWindowSec>=3600) return 'hour';
+  if(statsWindowSec>=60) return Math.round(statsWindowSec/60)+' min';
+  return statsWindowSec+'s';
+}
+function drawStatChart(id, valId, label, samples, get, fmt, color, events){
+  const cv=document.getElementById(id); if(!cv) return;
+  const valEl=valId?document.getElementById(valId):null;
+  const parent=cv.parentElement; const w=((parent&&parent.clientWidth)||600), h=110;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.max(1,Math.round(w*dpr)); cv.height=Math.round(h*dpr);
+  cv.style.width=w+'px'; cv.style.height=h+'px';
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const padL=46, padR=8, padT=8, padB=16;
+  const iw=Math.max(10,w-padL-padR), ih=Math.max(10,h-padT-padB);
+  ctx.font='10px JetBrains Mono, monospace';
+  if(!samples.length){
+    ctx.fillStyle='#94A3B8'; ctx.fillText('waiting for samples…', padL, padT+12);
+    if(valEl) valEl.textContent='—';
+    cv._stats=null; return;
+  }
+  const vals=samples.map(s=>{ const v=get(s); return (typeof v==='number'&&isFinite(v))?v:0; });
+  let mn=Math.min.apply(null, vals), mx=Math.max.apply(null, vals);
+  if(!(mx>mn)){ mx=mn+1; }
+  const spanPad=(mx-mn)*0.15; mn-=spanPad; mx+=spanPad;
+  const t0=samples[0].t, t1=samples[samples.length-1].t, span=Math.max(1,t1-t0);
+  const X=t=>padL+((t-t0)/span)*iw;
+  const Y=v=>padT+ih-((v-mn)/(mx-mn))*ih;
+  ctx.lineWidth=1;
+  [mn,(mn+mx)/2,mx].forEach(g=>{
+    const y=Math.round(Y(g))+0.5;
+    ctx.strokeStyle='rgba(148,163,184,0.18)';
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle='#94A3B8'; ctx.fillText(fmt(g), 2, y+3);
+  });
+  if(events) for(const ev of events){
+    if(!ev||ev.t<t0||ev.t>t1) continue;
+    const x=Math.round(X(ev.t))+0.5;
+    ctx.strokeStyle=ev.type==='join'?'rgba(16,185,129,0.55)':'rgba(239,68,68,0.55)';
+    ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+ih); ctx.stroke();
+  }
+  const grad=ctx.createLinearGradient(0,padT,0,padT+ih);
+  grad.addColorStop(0,color+'55'); grad.addColorStop(1,color+'00');
+  ctx.beginPath();
+  samples.forEach((s,i)=>{ const x=X(s.t), y=Y(vals[i]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.lineTo(X(t1),padT+ih); ctx.lineTo(X(t0),padT+ih); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.fillStyle='#94A3B8';
+  ctx.fillText(fmtTime(t0), padL, h-3);
+  const te=fmtTime(t1); ctx.fillText(te, w-padR-ctx.measureText(te).width, h-3);
+  if(valEl) valEl.textContent=fmt(vals[vals.length-1]);
+  cv._stats={samples,vals,t0,t1,mn,mx,fmt,events:events||[],label:label||id};
+  setupStatsHover(id);
+}
+function setupStatsHover(id){
+  const cv=document.getElementById(id); if(!cv||cv.dataset.hoverBound) return;
+  cv.dataset.hoverBound='1';
+  const tip=document.getElementById('statsTip');
+  cv.addEventListener('mousemove', e=>{
+    const g=cv._stats, tp=tip;
+    if(!g||!g.samples.length||!tp) return;
+    const r=cv.getBoundingClientRect();
+    const padL=46, padR=8, padT=8, padB=16;
+    const iw=Math.max(1,r.width-padL-padR), ih=Math.max(1,r.height-padT-padB);
+    const frac=Math.max(0,Math.min(1,(e.clientX-r.left-padL)/iw));
+    const t=g.t0+frac*(g.t1-g.t0);
+    let bi=0, bd=Infinity;
+    for(let i=0;i<g.samples.length;i++){ const d=Math.abs(g.samples[i].t-t); if(d<bd){ bd=d; bi=i; } }
+    const s=g.samples[bi], v=g.vals[bi];
+    const y=padT+ih-((v-g.mn)/Math.max(1e-9,(g.mx-g.mn)))*ih;
+    const x=padL+frac*iw;
+    tp.style.display='block';
+    tp.style.left=Math.min(Math.max(0,r.width-180),Math.max(4,x+12))+'px';
+    tp.style.top=Math.max(4,y-12)+'px';
+    let evTxt='';
+    for(const ev of g.events){
+      if(Math.abs(ev.t-s.t)<2000){ evTxt='<div style="opacity:0.75">'+ev.type+' · '+(ev.where||'')+'</div>'; break; }
+    }
+    tp.innerHTML='<div style="opacity:0.6;font-size:11px">'+(g.label||'')+'</div><div style="font-size:15px;font-weight:600">'+g.fmt(v)+'</div><div style="opacity:0.75">'+fmtTime(s.t)+'</div>'+evTxt;
+  });
+  cv.addEventListener('mouseleave', ()=>{ if(tip) tip.style.display='none'; });
+}
+setInterval(()=>{ try{ const p=document.querySelector('#tab-stats'); if(p&&!p.classList.contains('hidden')) loadStats(); }catch(e){} }, 5000);
+document.addEventListener('change', e=>{
+  if(e.target && e.target.id==='statsSession'){ statsSessionId=e.target.value; try{ renderStats(); }catch(err){} }
+  if(e.target && e.target.id==='statsWindow'){ statsWindowSec=parseInt(e.target.value)||0; try{ localStorage.setItem('cc_statsWindow', String(statsWindowSec)); }catch(err){} try{ renderStats(); }catch(err){} }
+  if(e.target && e.target.id==='statsEnabled'){
+    const next=e.target.checked;
+    const m=config.modules.statistics=config.modules.statistics||{enabled:true};
+    m.enabled=next;
+    send({type:'UPDATE_MODULE', id:'statistics', data:{enabled:next}});
+  }
+});
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id==='statsDelete'){
+    if(!confirm('Delete all recorded statistics?')) return;
+    fetch('/api/stats/clear', {method:'POST'}).then(()=>loadStats()).catch(()=>{});
+  }
+});
 function retryNow(){
   if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
   connect();
 }
 function switchTab(tab){
+  if(tab==='stats'){ try{ loadStats(); }catch(e){} }
   const current=document.querySelector('.tab-panel:not(.hidden)');
   const next=document.getElementById('tab-'+tab);
   if(current && next && current!==next){
@@ -1388,8 +1602,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   const centerBtn=document.querySelector('#editorCenterBtn');
   if(centerBtn) centerBtn.onclick=()=>{
     const targetId=getEditorTargetId(); if(!targetId) return;
-    const nx=Math.max(0, Math.round((windowSize.scaledWidth||640)/2)-EDITOR_CENTER_W/2);
-    const ny=Math.max(0, Math.round((windowSize.scaledHeight||360)/2)-EDITOR_CENTER_H/2);
+    // Prefer the pill's live size so measured/keystroke boxes truly center.
+    let cw=EDITOR_CENTER_W, ch=EDITOR_CENTER_H;
+    try{
+      const pv=(window.modulePreviews||{})[targetId];
+      if(pv && ((pv.w||0)>0 || (pv.h||0)>0)){ cw=pv.w||cw; ch=pv.h||ch; }
+    }catch(e){}
+    const nx=Math.max(0, Math.round((windowSize.scaledWidth||640)/2)-cw/2);
+    const ny=Math.max(0, Math.round((windowSize.scaledHeight||360)/2)-ch/2);
     const mod=config.modules[targetId]=config.modules[targetId]||{x:10,y:10,scale:1,opacity:1,enabled:false};
     mod.x=nx; mod.y=ny;
     send({type:'UPDATE_MODULE', id:targetId, data:{x:nx, y:ny}}); syncEditorItem();

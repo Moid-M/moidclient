@@ -30,6 +30,11 @@ Finished modules also live in the README table; this file tracks everything else
 | Item Physics | Visuals | `itemPhysics` |
 | Autohide HUD | HUD | `autohideHud` |
 | Telemetry Block | Utility | `telemetryBlock` |
+| Combo Counter | HUD | `comboCounter` |
+| Reach Display | HUD | `reachDisplay` |
+| Memory Usage | HUD | `memoryUsage` |
+| Statistics | Utility | `statistics` |
+| Chat Stack | Utility | `chatStack` |
 
 ## 🔨 In progress (this batch)
 
@@ -40,7 +45,7 @@ Finished modules also live in the README table; this file tracks everything else
 
 ## 🧱 Infra
 
-- [x] **Stonecutter migration** — one shared `src/`, per-version nodes (`versions/26.1`, `versions/26.2`, `versions/26.3`), per-version jars (`Moid-Client-v1.3.0+26.x.jar`). Build one: `./gradlew :26.3:build`. Build all: `./gradlew :26.1:build :26.2:build :26.3:build`. Reset to VCS version before committing: `./gradlew "Reset active project"`.
+- [x] **Stonecutter migration** — one shared `src/`, per-version nodes (`versions/26.1`, `versions/26.2`, `versions/26.3`), per-version jars (`Moid-Client-v1.4.0+26.x.jar`). Build one: `./gradlew :26.3:build`. Build all: `./gradlew :26.1:build :26.2:build :26.3:build`. Reset to VCS version before committing: `./gradlew "Reset active project"`.
 
 ## ⏭ Next up (agreed core gaps)
 
@@ -48,9 +53,7 @@ Finished modules also live in the README table; this file tracks everything else
 |---|---|---|
 | Crosshair Customization | HUD | already planned in README |
 | Direction / Compass | HUD | cheap, loved by builders/PvPers |
-| Combo Counter | HUD | consecutive hits, PvP staple, needs attack hook |
 | Inventory HUD | HUD | see inventory contents without opening it |
-| Autohide Hotbar/HUD | HUD | fade out when idle, Lunar-style QoL |
 | Mousestrokes | HUD | drag-direction indicator, two circles |
 
 ## 💡 Parked ideas (later)
@@ -60,8 +63,6 @@ Finished modules also live in the README table; this file tracks everything else
 - Particles multiplier (Visuals)
 - Nametag tweaks, subtle only (Visuals)
 - Item counter / durability warnings (HUD)
-- Memory usage (HUD, trivial via Runtime, debug flavor)
-- Reach Display (HUD, last-attack distance, needs attack hook like Combo)
 - Auto Reconnect (Utility, rejoin after disconnect, needs care on servers)
 - Damage Indicator (HUD, floating damage numbers, needs attack hook like Combo)
 - Zoom level reset (Utility, small: one-click reset for scroll-adjusted zoom)

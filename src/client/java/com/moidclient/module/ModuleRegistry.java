@@ -14,10 +14,15 @@ import com.moidclient.hud.server.ServerHud;
 import com.moidclient.hud.session.SessionTimerHud;
 import com.moidclient.hud.potions.PotionEffectsHud;
 import com.moidclient.hud.armor.ArmorStatusHud;
+import com.moidclient.hud.combo.ComboHud;
+import com.moidclient.hud.memory.MemoryHud;
+import com.moidclient.hud.reach.ReachHud;
 import com.moidclient.hud.tps.TpsHud;
 import com.moidclient.utility.autohide.AutohideManager;
+import com.moidclient.utility.chatstack.ChatStackManager;
 import com.moidclient.utility.freelook.FreeLookManager;
 import com.moidclient.utility.telemetryblock.TelemetryBlockManager;
+import com.moidclient.utility.statistics.StatisticsManager;
 import com.moidclient.utility.perspectiveskip.PerspectiveSkipManager;
 import com.moidclient.utility.togglesneak.ToggleSneakManager;
 import com.moidclient.utility.togglesprint.ToggleSprintManager;
@@ -61,6 +66,9 @@ public final class ModuleRegistry {
         register(SessionTimerHud::definition, SessionTimerHud::preview);
         register(PotionEffectsHud::definition, PotionEffectsHud::preview);
         register(ArmorStatusHud::definition, ArmorStatusHud::preview);
+        register(ComboHud::definition, ComboHud::preview);
+        register(ReachHud::definition, ReachHud::preview);
+        register(MemoryHud::definition, MemoryHud::preview);
         register(FullbrightManager::definition, null);
         register(BlockOutlineRenderer::definition, null);
         register(PerspectiveSkipManager::definition, null);
@@ -72,6 +80,8 @@ public final class ModuleRegistry {
         register(ItemPhysicsManager::definition, null);
         register(AutohideManager::definition, null);
         register(TelemetryBlockManager::definition, null);
+        register(StatisticsManager::definition, null);
+        register(ChatStackManager::definition, null);
     }
 
     /**
@@ -83,6 +93,7 @@ public final class ModuleRegistry {
         ModuleDef def = defFn.get();
         DEFS.put(def.id, defFn);
         if (previewFn != null) PREVIEWS.put(def.id, previewFn);
+        else PREVIEWS.remove(def.id);
     }
 
     public static List<ModuleDef> all() {
@@ -126,7 +137,7 @@ public final class ModuleRegistry {
                     config.getModules().put(def.id, mod);
                     touched = true;
                 }
-                if (mod.custom == null) continue;
+                if (mod.custom == null) mod.custom = new LinkedHashMap<>();
                 for (ModuleOption opt : def.options) {
                     if (opt.defValue == null || opt.defValue.isJsonNull()) continue;
                     if (ConfigManager.isKnownModuleKey(opt.key)) continue;
