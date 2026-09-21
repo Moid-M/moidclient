@@ -44,6 +44,8 @@ public class ClientMod implements ClientModInitializer {
     private int keySyncTick=0;
     private int statsTick=0;
     private com.moidclient.stats.StatsRecorder statsRecorder;
+    private com.moidclient.update.UpdateManager updateManager;
+    private volatile boolean pendingUpdateRestart = false;
 
     @Override
     public void onInitializeClient() {
@@ -69,6 +71,12 @@ public class ClientMod implements ClientModInitializer {
 
         // 2) Server (dynamic port binding + asset serving + WS)
         serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson, statsRecorder);
+        // 2b) Self-updater: janitor first (completes interrupted swaps),
+        // then wire status/restart into the dashboard server.
+        updateManager = new com.moidclient.update.UpdateManager(networkPackets);
+        try { updateManager.runStartupJanitor(); } catch (Exception e) { LOGGER.error("[MoidClient] Update janitor failed", e); }
+        serverManager.setUpdateManager(updateManager);
+        serverManager.setRestartHook(this::requestUpdateRestart);
         try {
             serverManager.start();
         } catch (Exception e) {
@@ -144,6 +152,12 @@ public class ClientMod implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (openGuiKey != null) while (openGuiKey.consumeClick()) {
                 openWebGui();
+            }
+            // Update restart requested from the dashboard: the watcher script
+            // is already detached, so stop cleanly on the client thread.
+            if (pendingUpdateRestart && client != null) {
+                pendingUpdateRestart = false;
+                try { client.stop(); } catch (Exception e) { LOGGER.error("[MoidClient] Update restart stop failed", e); }
             }
             // window size broadcast for HUD editor rectangle preview (throttled 10 ticks)
             if (++windowTick % 10 == 0 && client != null && client.getWindow() != null) {
@@ -240,6 +254,38 @@ public class ClientMod implements ClientModInitializer {
         // will be sent on next tick where window is available (handled via windowTick counter)
         String baseUrl = serverManager.getActivePort() == -1 ? "server failed to start (see log)" : serverManager.getBaseUrl();
         LOGGER.info("[MoidClient] Initialized. Press [K] to open Web Dashboard at {}", baseUrl);
+    }
+
+    /**
+     * Dashboard "Restart now": launches the detached watcher script (it swaps
+     * the jars after this process exits) and stops the game cleanly. The
+     * actual stop happens on the next client tick - see END_CLIENT_TICK.
+     * ProcessBuilder arg arrays only, no shell involved.
+     */
+    private void requestUpdateRestart() {
+        try {
+            if (updateManager == null || updateManager.stagedFileName() == null) {
+                LOGGER.warn("[MoidClient] Restart requested with nothing staged");
+                return;
+            }
+            java.nio.file.Path script = updateManager.writeRestartScript();
+            String pid = String.valueOf(ProcessHandle.current().pid());
+            new ProcessBuilder("powershell", "-WindowStyle", "Hidden",
+                    "-ExecutionPolicy", "Bypass", "-File", script.toString(),
+                    pid,
+                    com.moidclient.update.UpdateManager.modsDir().toString(),
+                    com.moidclient.update.UpdateManager.stageDir().toString(),
+                    updateManager.stagedFileName(),
+                    com.moidclient.update.UpdateManager.resultFile().toString())
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            updateManager.markRestarting();
+            pendingUpdateRestart = true;
+            LOGGER.info("[MoidClient] Update restart armed, stopping game");
+        } catch (Exception e) {
+            LOGGER.error("[MoidClient] Update restart failed", e);
+        }
     }
 
     public void openWebGui() {

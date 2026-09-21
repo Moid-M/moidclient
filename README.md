@@ -12,6 +12,7 @@ A lightweight, open-source Fabric client with a clickgui that runs entirely in y
 - **Blocks Mojang telemetry.** On by default: forces vanilla's telemetry off-switch, so analytics events never leave your PC. Logins, skins, and servers work untouched. (Toggling it mid-session settles fully on world rejoin.)
 - **Open source (GPLv3).** Fork it, modify it, learn from it — just keep it open if you redistribute it.
 - **Browser-based clickgui.** The control panel is a local webpage (`localhost` only), not an in-game overlay — full CSS theming, no fighting Java rendering for a UI.
+- **Self-updating.** The dashboard's Updates tab checks GitHub releases on demand, downloads the jar for your Minecraft version with a progress bar, verifies its SHA-256 checksum, and either restarts into it automatically or lets you apply it whenever you like.
 
 ## Supported Versions
 

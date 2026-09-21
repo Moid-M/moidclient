@@ -46,6 +46,7 @@ Finished modules also live in the README table; this file tracks everything else
 ## 🧱 Infra
 
 - [x] **Stonecutter migration** — one shared `src/`, per-version nodes (`versions/26.1`, `versions/26.2`, `versions/26.3`), per-version jars (`Moid-Client-v1.4.0+26.x.jar`). Build one: `./gradlew :26.3:build`. Build all: `./gradlew :26.1:build :26.2:build :26.3:build`. Reset to VCS version before committing: `./gradlew "Reset active project"`.
+- [x] **Self-update** — Updates dashboard tab: on-demand GitHub stable-release check, per-MC-version asset pick, background download with WS progress, SHA-256 verification (refuses unstaged/unchecksummed releases), staging outside `mods/`, one-click restart via detached watcher script (crash-safe `.pending` swap order) or manual apply. Release flow publishes `<jar>.sha256` assets alongside jars.
 
 ## ⏭ Next up (agreed core gaps)
 

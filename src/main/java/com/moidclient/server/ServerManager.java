@@ -23,6 +23,8 @@ public class ServerManager {
     private final NetworkPackets network;
     private final Supplier<com.google.gson.JsonElement> moduleDefs;
     private final StatsRecorder stats;
+    private volatile com.moidclient.update.UpdateManager updates;
+    private volatile Runnable restartHook;
     private Javalin app;
     private int activePort = -1;
 
@@ -44,6 +46,16 @@ public class ServerManager {
 
     public int getActivePort() {
         return activePort;
+    }
+
+    /** Wired once at startup; null until then (endpoints answer IDLE). */
+    public void setUpdateManager(com.moidclient.update.UpdateManager updates) {
+        this.updates = updates;
+    }
+
+    /** Client-side restart (launches the watcher, then stops the game). */
+    public void setRestartHook(Runnable restartHook) {
+        this.restartHook = restartHook;
     }
 
     public String getBaseUrl() {
@@ -139,7 +151,64 @@ public class ServerManager {
                   LOGGER.warn("[MoidClient][Web] log failed", e);
                   ctx.status(500).result("err");
               }
+          })
+          .get("/api/update/status", ctx -> {
+              try {
+                  com.google.gson.JsonObject s = updates != null
+                          ? updates.statusJson() : idleUpdateJson();
+                  ctx.contentType("application/json").result(s.toString());
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"phase\":\"ERROR\",\"error\":\"status failed\"}");
+              }
+          })
+          .post("/api/update/check", ctx -> {
+              try {
+                  if (updates == null) { ctx.status(503).result("{\"phase\":\"ERROR\",\"error\":\"updater not ready\"}"); return; }
+                  updates.check();
+                  ctx.contentType("application/json").result(updates.statusJson().toString());
+              } catch (Exception e) {
+                  LOGGER.warn("[MoidClient] Update check endpoint failed", e);
+                  ctx.status(500).result("{\"phase\":\"ERROR\",\"error\":\"check failed\"}");
+              }
+          })
+          .post("/api/update/download", ctx -> {
+              try {
+                  if (updates == null) { ctx.status(503).result("{\"error\":\"updater not ready\"}"); return; }
+                  boolean started = updates.startDownload();
+                  ctx.contentType("application/json").result("{\"started\":" + started + "}");
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"started\":false}");
+              }
+          })
+          .post("/api/update/discard", ctx -> {
+              try {
+                  if (updates == null) { ctx.status(503).result("{\"error\":\"updater not ready\"}"); return; }
+                  updates.discardStaged();
+                  ctx.contentType("application/json").result(updates.statusJson().toString());
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"error\":\"discard failed\"}");
+              }
+          })
+          .post("/api/update/restart", ctx -> {              try {
+                  if (updates == null || restartHook == null) {
+                      ctx.status(503).result("{\"error\":\"restart not available\"}");
+                      return;
+                  }
+                  updates.writeRestartScript();
+                  restartHook.run();
+                  ctx.contentType("application/json").result("{\"ok\":true}");
+              } catch (Exception e) {
+                  LOGGER.warn("[MoidClient] Update restart failed", e);
+                  String msg = e.getMessage() == null ? "restart failed" : e.getMessage().replace("\"", "'");
+                  ctx.status(500).result("{\"error\":\"" + msg + "\"}");
+              }
           });
+    }
+
+    private static com.google.gson.JsonObject idleUpdateJson() {
+        com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+        o.addProperty("phase", "IDLE");
+        return o;
     }
 
     public void stop() {

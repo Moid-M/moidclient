@@ -1261,7 +1261,7 @@ function connect(){
   sock.onclose=()=>{ if(ws!==sock) return; setConnection(false); if(reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer=setTimeout(connect,2000); };
   sock.onerror=()=>{ if(ws!==sock) return; setConnection(false); };
   sock.onmessage=ev=>{
-    try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); if(msg.type==='LIVE_STATS') handleLiveStats(msg.data); }catch(e){ console.error(e); }
+    try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); if(msg.type==='LIVE_STATS') handleLiveStats(msg.data); if(msg.type==='UPDATE_STATUS') renderUpdateStatus(msg.data); }catch(e){ console.error(e); }
   };
 }
 // ---- Statistics tab: local performance history charts ----
@@ -1462,8 +1462,115 @@ function retryNow(){
   if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
   connect();
 }
+// ---- Updates tab: GitHub release check + staged self-update ----
+let updState=null;
+function fmtMB(b){ if(!b||b<=0) return '—'; return (b/1048576).toFixed(1)+' MB'; }
+function updBusy(){ return !!updState && (updState.phase==='CHECKING'||updState.phase==='DOWNLOADING'||updState.phase==='VERIFYING'); }
+function setUpdMsg(t){ const m=$('#updMsg'); if(m) m.textContent=t; }
+async function refreshUpdateStatus(){
+  try{
+    const r=await fetch('/api/update/status');
+    if(!r.ok) return;
+    renderUpdateStatus(await r.json());
+  }catch(e){}
+}
+async function updCheck(){
+  if(updBusy()) return;
+  setUpdMsg('Checking GitHub releases…');
+  try{
+    const r=await fetch('/api/update/check',{method:'POST'});
+    if(!r.ok) throw new Error('http '+r.status);
+    renderUpdateStatus(await r.json());
+  }catch(e){ setUpdMsg('Check failed — offline? Nothing was changed.'); }
+}
+async function updDownload(){
+  try{
+    const r=await fetch('/api/update/download',{method:'POST'});
+    const j=await r.json();
+    if(!j.started) setUpdMsg('Download did not start — check again first.');
+  }catch(e){ setUpdMsg('Download failed to start.'); }
+}
+async function updDiscard(){
+  try{
+    const r=await fetch('/api/update/discard',{method:'POST'});
+    renderUpdateStatus(await r.json());
+  }catch(e){}
+}
+async function updRestart(){
+  const v=updState&&updState.latest ? 'v'+updState.latest : 'the update';
+  if(!confirm('Restart Minecraft now to apply '+v+'? The game will close and the new jar swaps in before you relaunch.')) return;
+  setUpdMsg('Restarting to apply the update… you can close this tab.');
+  try{ await fetch('/api/update/restart',{method:'POST'}); }catch(e){}
+}
+function updManualHtml(s){
+  const staged=escAttr(s.stagedFile||'');
+  const old=escAttr(s.oldFile||'the old Moid-Client jar');
+  return `<div class="font-medium mb-1" style="color:var(--text-bright)">Apply whenever you like</div>`
+    + `<div><span style="color:var(--accent)">✓</span> <span class="font-mono">${staged}</span> downloaded &amp; SHA-256 verified.</div>`
+    + `<ol class="list-decimal ml-4 mt-1 space-y-0.5"><li>Close Minecraft.</li><li>Delete <span class="font-mono">${old}</span> from your <span class="font-mono">mods</span> folder.</li><li>Move <span class="font-mono">${staged}</span> from <span class="font-mono">moidclient-update</span> into <span class="font-mono">mods</span>.</li><li>Launch Minecraft.</li></ol>`;
+}
+function renderUpdateStatus(s){
+  if(!s) return;
+  updState=s;
+  const cur=$('#updCurrent'); if(cur) cur.textContent='v'+(s.current||'?');
+  const lw=$('#updLatestWrap'); if(lw) lw.classList.toggle('hidden', !s.latest);
+  const lt=$('#updLatest'); if(lt && s.latest) lt.textContent='v'+s.latest;
+  const dot=$('#updDot'); if(dot) dot.classList.toggle('hidden', !(s.updateAvailable||s.phase==='READY'));
+  const res=$('#updResult');
+  if(res){
+    if(s.lastResult){
+      const ok=s.lastResult.ok;
+      res.classList.remove('hidden');
+      res.style.borderColor=ok?'var(--accent)':'#EF4444';
+      res.innerHTML=ok
+        ? `<span style="color:var(--accent)">✓</span> Update applied: <span class="font-mono">${escAttr(s.lastResult.version||'')}</span> — you're running it now.`
+        : `<span style="color:#EF4444">⚠</span> Last update failed: ${escAttr(s.lastResult.error||'unknown error')} — nothing was changed, try again.`;
+    } else { res.classList.add('hidden'); res.innerHTML=''; }
+  }
+  const pw=$('#updProgressWrap'), act=$('#updActions'), man=$('#updManual');
+  const showProg=(s.phase==='DOWNLOADING'||s.phase==='VERIFYING');
+  if(pw) pw.classList.toggle('hidden', !showProg);
+  if(showProg){
+    const pct=s.total>0 ? Math.max(0,Math.min(100,Math.round(s.received/s.total*100))) : 0;
+    const bar=$('#updBar'); if(bar) bar.style.width=pct+'%';
+    const pc=$('#updPct'); if(pc) pc.textContent=pct+'%';
+    const ph=$('#updPhase'); if(ph) ph.textContent=s.phase==='VERIFYING'?'Verifying SHA-256…':'Downloading…';
+    const by=$('#updBytes'); if(by) by.textContent=fmtMB(s.received)+' / '+fmtMB(s.total);
+  }
+  const btn=(id,label)=>`<button id="${id}" class="text-xs px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">${label}</button>`;
+  const btnAccent=(id,label)=>`<button id="${id}" class="text-xs px-3 py-1.5 rounded-full border font-medium" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%, transparent);color:var(--text-bright)">${label}</button>`;
+  let html='';
+  if(s.phase==='CHECKING') setUpdMsg('Checking GitHub releases…');
+  else if(s.phase==='ERROR') setUpdMsg('⚠ '+(s.error||'Something went wrong.'));
+  else if(s.phase==='RESTARTING') setUpdMsg('Restarting to apply the update… you can close this tab.');
+  else if(s.phase==='READY'){
+    setUpdMsg('');
+    html=btnAccent('updRestart','Restart now')+btn('updManualToggle', (man&&!man.classList.contains('hidden'))?'Hide manual steps':"I'll restart myself")+btn('updDiscard','Discard staged');
+    if(man){ man.classList.remove('hidden'); man.innerHTML=updManualHtml(s); }
+  }
+  else if(s.updateAvailable){
+    setUpdMsg('v'+s.latest+' is available ('+fmtMB(s.assetSize||s.total)+').');
+    html=btnAccent('updDownload','Download v'+s.latest);
+    if(man){ man.classList.add('hidden'); man.innerHTML=''; }
+  }
+  else {
+    setUpdMsg(s.note||(s.latest ? 'Up to date.' : 'Press check — nothing phones home until you do.'));
+    if(man){ man.classList.add('hidden'); man.innerHTML=''; }
+  }
+  if(act) act.innerHTML=html;
+  const chk=$('#updCheck'); if(chk) chk.style.opacity=updBusy()?'0.5':'';
+}
+document.addEventListener('click', e=>{
+  if(!e.target) return;
+  if(e.target.id==='updCheck') updCheck();
+  else if(e.target.id==='updDownload') updDownload();
+  else if(e.target.id==='updRestart') updRestart();
+  else if(e.target.id==='updDiscard') updDiscard();
+  else if(e.target.id==='updManualToggle'){ const man=$('#updManual'); if(man) man.classList.toggle('hidden'); if(updState) renderUpdateStatus(updState); }
+});
 function switchTab(tab){
   if(tab==='stats'){ try{ loadStats(); }catch(e){} }
+  if(tab==='update'){ try{ refreshUpdateStatus(); }catch(e){} }
   const current=document.querySelector('.tab-panel:not(.hidden)');
   const next=document.getElementById('tab-'+tab);
   if(current && next && current!==next){

@@ -233,6 +233,19 @@ public class NetworkPackets {
             sendSafe(wsCtx, msg);
         }
     }
+    /** Pushes updater progress to every dashboard (phase/received/total). */
+    public void broadcastUpdateStatus(JsonObject data) {
+        try {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("type", "UPDATE_STATUS");
+            payload.add("data", data != null ? data : new JsonObject());
+            String msg = payload.toString();
+            for (WsContext s : sessions.toArray(new WsContext[0])) {
+                sendSafe(s, msg);
+            }
+        } catch (Exception ignored) {}
+    }
+
     public Set<WsContext> getSessions() {
         return java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(sessions));
     }

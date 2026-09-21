@@ -69,6 +69,9 @@
       <div data-tab="stats" class="sidebar-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 20h18"/><path d="M5 20v-6M10 20V8M15 20v-9M20 20V5"/></svg> Statistics
       </div>
+      <div data-tab="update" class="sidebar-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg> Updates <span id="updDot" class="hidden ml-auto w-2 h-2 rounded-full" style="background:var(--accent)"></span>
+      </div>
     </div>
     <div class="mt-auto p-3 rounded-xl border text-xs leading-relaxed" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">
       Press <span class="px-1.5 py-0.5 rounded border text-[11px]" style="border-color:var(--border);color:var(--text-bright);font-family:'JetBrains Mono',monospace">K</span> in game to open this dashboard.
@@ -86,6 +89,7 @@
     <button data-tab="keybinds" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Keybinds</button>
     <button data-tab="theme" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Theme</button>
     <button data-tab="stats" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Stats</button>
+    <button data-tab="update" class="tab-m px-3 py-1.5 rounded-full text-xs font-medium border" style="border-color:var(--border)">Updates</button>
   </div>
 
   <!-- Main -->
@@ -311,6 +315,26 @@
           <canvas id="statMem" style="width:100%;height:110px;display:block"></canvas>
         </div>
         <div id="statsTip" class="absolute z-10 rounded-xl border font-mono" style="display:none;background:var(--card);border-color:var(--accent);color:var(--text-bright);pointer-events:none;white-space:nowrap;font-size:13px;padding:8px 12px;min-width:130px;box-shadow:0 4px 16px rgba(0,0,0,0.4)"></div>
+      </div>
+    </section>
+
+    <section id="tab-update" class="tab-panel hidden space-y-4">
+      <h2 class="text-[18px] font-semibold">Updates</h2>
+      <p class="text-xs" style="color:var(--text-muted)">Checked against GitHub releases, only when you ask. Downloads are SHA-256 verified before anything is staged.</p>
+      <div id="updResult" class="hidden card p-4 text-xs"></div>
+      <div class="card p-4 space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="text-xs" style="color:var(--text-muted)">Running <span id="updCurrent" class="font-mono" style="color:var(--text-bright)">—</span> <span id="updLatestWrap" class="hidden">• latest <span id="updLatest" class="font-mono" style="color:var(--accent)">—</span></span></div>
+          <button id="updCheck" class="text-xs px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">Check for updates</button>
+        </div>
+        <div id="updMsg" class="text-xs" style="color:var(--text-muted)">Press check — nothing phones home until you do.</div>
+        <div id="updProgressWrap" class="hidden space-y-1.5">
+          <div class="flex justify-between text-[11px] font-mono" style="color:var(--text-muted)"><span id="updPhase">Downloading…</span><span id="updPct">0%</span></div>
+          <div class="h-2 rounded-full overflow-hidden" style="background:var(--bg);border:1px solid var(--border)"><div id="updBar" class="h-full rounded-full" style="width:0%;background:var(--accent);transition:width 200ms"></div></div>
+          <div id="updBytes" class="text-[11px] font-mono" style="color:var(--text-muted)"></div>
+        </div>
+        <div id="updActions" class="flex gap-2 flex-wrap"></div>
+        <div id="updManual" class="hidden text-xs leading-relaxed rounded-xl border p-3" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)"></div>
       </div>
     </section>
   </main>
