@@ -63,9 +63,9 @@ public final class CombatTracker {
                 lastHealth = health;
                 return;
             }
+            // Damage ends the streak but preserves the session peak.
             if (health < lastHealth) {
                 combo = 0;
-                peakCombo = 0;
             }
             lastHealth = health;
         } catch (Exception ignored) {}

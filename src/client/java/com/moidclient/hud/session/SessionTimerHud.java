@@ -48,6 +48,9 @@ public final class SessionTimerHud {
         if (mc == null) return;
         String scope = scopeOf(mod);
         if ("world".equals(scope) && mc.level == null) return;
+        // A server session is over once disconnected: hide rather than
+        // counting up in menus (world scope already hides the same way).
+        if ("server".equals(scope) && mc.getConnection() == null) return;
 
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "Session: {time}";
         String time = formatElapsed(elapsedMs(scope));

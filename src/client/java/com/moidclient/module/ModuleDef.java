@@ -19,14 +19,26 @@ public final class ModuleDef {
     public final String icon;
     public final boolean editor;
     public final List<ModuleOption> options;
+    /**
+     * Whether fresh configs enable this module. Default false; modules that
+     * ship on (telemetry block, statistics) opt in. Existing user choices
+     * are never overwritten - this only seeds missing entries.
+     */
+    public final boolean defaultEnabled;
 
     public ModuleDef(String id, String name, String description, String category,
                      boolean overlay, List<ModuleOption> options) {
-        this(id, name, description, category, overlay, id, false, options);
+        this(id, name, description, category, overlay, id, false, options, false);
     }
 
     public ModuleDef(String id, String name, String description, String category,
                      boolean overlay, String icon, boolean editor, List<ModuleOption> options) {
+        this(id, name, description, category, overlay, icon, editor, options, false);
+    }
+
+    private ModuleDef(String id, String name, String description, String category,
+                      boolean overlay, String icon, boolean editor, List<ModuleOption> options,
+                      boolean defaultEnabled) {
         this.id = id;
         this.name = name;
         this.description = description;
@@ -35,6 +47,12 @@ public final class ModuleDef {
         this.icon = icon != null ? icon : id;
         this.editor = editor;
         this.options = List.copyOf(options);
+        this.defaultEnabled = defaultEnabled;
+    }
+
+    /** Copy with a fresh-config enabled default (existing choices untouched). */
+    public ModuleDef withDefaultEnabled(boolean enabled) {
+        return new ModuleDef(id, name, description, category, overlay, icon, editor, options, enabled);
     }
 
     public JsonObject toJson() {

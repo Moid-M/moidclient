@@ -122,18 +122,26 @@ public final class ModuleRegistry {
     /**
      * Applies option defaults declared in definitions into each module's
      * config (missing keys only, then saves if anything changed). Call once
-     * at startup: new options from modules or plugins land with zero
-     * ConfigManager edits. Keys claimed by explicit ConfigManager fields
-     * are skipped - those keep their own defaults.
+     * at startup - and after config imports - so new options from modules or
+     * plugins land with zero ConfigManager edits. Missing modules are created
+     * from their definition (enabled default + cascaded overlay position).
+     * Keys claimed by explicit ConfigManager fields are skipped - those keep
+     * their own defaults.
      */
     public static void applyOptionDefaults(ConfigManager config) {
         if (config == null) return;
         try {
             boolean touched = false;
-            for (ModuleDef def : all()) {
+            List<ModuleDef> defs = all();
+            int overlayIndex = 0;
+            for (ModuleDef def : defs) {
+                if (def.overlay) overlayIndex++;
                 ConfigManager.ModuleConfig mod = config.getModule(def.id);
                 if (mod == null) {
-                    mod = new ConfigManager.ModuleConfig(false, 10, 10);
+                    // Deterministic cascade: overlays stack down the screen in
+                    // registration order instead of piling on (10,10).
+                    int y = def.overlay ? 10 + 20 * (overlayIndex - 1) : 0;
+                    mod = new ConfigManager.ModuleConfig(def.defaultEnabled, 10, y);
                     config.getModules().put(def.id, mod);
                     touched = true;
                 }
@@ -148,6 +156,30 @@ public final class ModuleRegistry {
             }
             if (touched) config.save();
         } catch (Exception ignored) {}
+    }
+
+    /**
+     * Schema rule for one declared option, backing ConfigManager's
+     * definition-driven validation (see {@code ConfigManager.OptionSchema}).
+     * Returns null when the module or key is not declared.
+     */
+    public static ConfigManager.OptionRule schemaFor(String moduleId, String key) {
+        try {
+            Supplier<ModuleDef> fn = DEFS.get(moduleId);
+            if (fn == null || key == null) return null;
+            for (ModuleOption opt : fn.get().options) {
+                if (!opt.key.equals(key)) continue;
+                return switch (opt.type) {
+                    case "slider" -> ConfigManager.OptionRule.slider(opt.min, opt.max);
+                    case "select" -> ConfigManager.OptionRule.select(opt.options);
+                    case "color" -> ConfigManager.OptionRule.color(opt.nullable);
+                    case "boolean" -> ConfigManager.OptionRule.bool();
+                    case "keybind" -> ConfigManager.OptionRule.keybind();
+                    default -> ConfigManager.OptionRule.text();
+                };
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private static void putPreview(JsonObject out, ModulePreview preview) {

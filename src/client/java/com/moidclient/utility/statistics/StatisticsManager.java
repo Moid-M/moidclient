@@ -16,6 +16,6 @@ public final class StatisticsManager {
         return new ModuleDef("statistics", "Statistics",
                 "Records local performance history.",
                 "utility", false, "signal", false,
-                ModuleOption.list());
+                ModuleOption.list()).withDefaultEnabled(true);
     }
 }

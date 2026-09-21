@@ -258,19 +258,21 @@ public final class ZoomManager {
 
     /** Restores the user's sensitivity (FOV option was never touched). */
     private static void restoreSens(Minecraft mc) {
-        if (originalSens < 0) {
-            originalSens = -1;
-            return;
-        }
+        if (originalSens < 0) return;
+        // Clear only after a successful write: if mc/options is momentarily
+        // unavailable the saved value is kept so a later tick can retry
+        // instead of losing it (and leaving sensitivity lowered).
         try {
             if (mc != null && mc.options != null) {
                 OptionAccess sens = sensAccess(mc.options);
-                if (sens != null) sens.setFromDouble(originalSens);
+                if (sens != null) {
+                    sens.setFromDouble(originalSens);
+                    originalSens = -1;
+                }
             }
         } catch (Exception e) {
             LOGGER.debug("[MoidClient/Zoom] restore failed", e);
         }
-        originalSens = -1;
     }
 
     /**

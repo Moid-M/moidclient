@@ -203,24 +203,27 @@ public class ConfigManager {
                     JsonObject j = JsonParser.parseReader(r).getAsJsonObject();
                     this.root = j;
                     if (j.has("accentColor")) {
-                        String c = j.get("accentColor").getAsString();
+                        String c = safeString(j, "accentColor");
                         if (c != null && c.matches(HEX_PATTERN)) accentColor = c;
                     }
                     if (j.has("themeTextColor")) {
-                        String c = j.get("themeTextColor").getAsString();
+                        String c = safeString(j, "themeTextColor");
                         if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
                     } else if (j.has("textColor")) {
-                        String c = j.get("textColor").getAsString();
+                        String c = safeString(j, "textColor");
                         if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
                     }
                     if (j.has("modules") && j.get("modules").isJsonObject()) {
                         JsonObject mods = j.getAsJsonObject("modules");
                         for (var e : mods.entrySet()) {
-                            ModuleConfig cfg = GSON.fromJson(e.getValue(), ModuleConfig.class);
-                            modules.put(e.getKey(), cfg);
+                            try {
+                                ModuleConfig cfg = GSON.fromJson(e.getValue(), ModuleConfig.class);
+                                modules.put(e.getKey(), cfg);
+                            } catch (Exception ex) {
+                                LOGGER.warn("[MoidClient] Skipping corrupt module entry '{}' during migration", e.getKey());
+                            }
                         }
                     }
-                    ensureDefaults(false);
                     // fill missing ping defaults
                     fillMissingDefaults();
                     save();
@@ -236,28 +239,32 @@ public class ConfigManager {
         try (java.io.Reader reader = new java.io.InputStreamReader(new java.io.FileInputStream(configFile), java.nio.charset.StandardCharsets.UTF_8)) {
             JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
             this.root = json;
-            // accent - validated
+            // accent - validated (per-field guarded: one corrupt value must not wipe the config)
             if (json.has("accentColor")) {
-                String c = json.get("accentColor").getAsString();
+                String c = safeString(json, "accentColor");
                 if (c != null && c.matches(HEX_PATTERN)) accentColor = c;
             }
             if (json.has("themeTextColor")) {
-                String c = json.get("themeTextColor").getAsString();
+                String c = safeString(json, "themeTextColor");
                 if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
             } else if (json.has("textColor")) {
-                String c = json.get("textColor").getAsString();
+                String c = safeString(json, "textColor");
                 if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
             }
-            // modules
+            // modules (per-entry guarded: a corrupt module is skipped, the rest load)
             if (json.has("modules") && json.get("modules").isJsonObject()) {
                 JsonObject mods = json.getAsJsonObject("modules");
                 for (var entry : mods.entrySet()) {
-                    ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
-                    modules.put(entry.getKey(), cfg);
+                    try {
+                        ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
+                        modules.put(entry.getKey(), cfg);
+                    } catch (Exception ex) {
+                        LOGGER.warn("[MoidClient] Skipping corrupt module entry '{}'", entry.getKey());
+                    }
                 }
             }
-            // ensure all expected modules exist
-            ensureDefaults(false);
+            // heal/clamp explicit fields; missing modules are seeded from
+            // definitions by ModuleRegistry.applyOptionDefaults after load.
             fillMissingDefaults();
             LOGGER.info("[MoidClient] Loaded config from {}", configFile.getAbsolutePath());
         } catch (Exception e) {
@@ -271,49 +278,10 @@ public class ConfigManager {
         root = new JsonObject();
         accentColor = DEFAULT_ACCENT;
         modules.clear();
-        ensureDefaults(true);
-    }
-
-    /**
-     * Ensure all HUD modules exist. If `overwrite` false, only add missing.
-     */
-    private void ensureDefaults(boolean overwrite) {
-        registerDefault("ping", new ModuleConfig(false, 10, 50), overwrite);
-        registerDefault("fpsCounter", new ModuleConfig(false, 10, 10), overwrite);
-        registerDefault("tpsCounter", new ModuleConfig(false, 10, 70), overwrite);
-        registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
-        registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
-        registerDefault("coords", new ModuleConfig(false, 10, 110), overwrite);
-        registerDefault("server", new ModuleConfig(false, 10, 130), overwrite);
-        registerDefault("clock", new ModuleConfig(false, 10, 150), overwrite);
-        registerDefault("biome", new ModuleConfig(false, 10, 170), overwrite);
-        registerDefault("sessionTimer", new ModuleConfig(false, 10, 190), overwrite);
-        registerDefault("potionEffects", new ModuleConfig(false, 10, 210), overwrite);
-        registerDefault("armorStatus", new ModuleConfig(false, 10, 230), overwrite);
-        registerDefault("comboCounter", new ModuleConfig(false, 10, 250), overwrite);
-        registerDefault("reachDisplay", new ModuleConfig(false, 10, 270), overwrite);
-        registerDefault("memoryUsage", new ModuleConfig(false, 10, 290), overwrite);
-        registerDefault("toggleSprint", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("toggleSneak", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("itemPhysics", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("autohideHud", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("zoom", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("freelook", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("chatStack", new ModuleConfig(false, 0, 0), overwrite);
-        // telemetryBlock + statistics ship ON: never overwrite an existing choice.
-        registerDefault("telemetryBlock", new ModuleConfig(true, 0, 0), false);
-        registerDefault("statistics", new ModuleConfig(true, 0, 0), false);
-        // removed: testModule, fpsBoost (not implemented)
-    }
-
-    private void registerDefault(String id, ModuleConfig cfg, boolean overwrite) {
-        if (overwrite || !modules.containsKey(id)) {
-            modules.put(id, cfg);
-        }
+        // Missing modules are seeded from their definitions by
+        // ModuleRegistry.applyOptionDefaults (client sourceset owns the id
+        // list, so this class no longer names any module). Until that runs,
+        // the map is simply empty - every reader null-guards getModule().
     }
 
     private void fillMissingDefaults() {
@@ -562,6 +530,65 @@ public class ConfigManager {
      * falls into {@code ModuleConfig.custom} (validated) so new options work
      * without editing this file. Keep in sync when adding explicit fields. */
     private static final String HEX_PATTERN = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$";
+
+    /**
+     * Validation rule for one declared option, supplied by whoever owns the
+     * module definitions (the client-sourceset registry - this common class
+     * must not depend on it). Lets patch validation follow definitions so
+     * future and plugin options enforce ranges/allowlists with zero edits
+     * here. A null rule (or no provider) keeps the lenient base guards.
+     */
+    public static final class OptionRule {
+        public final String type;
+        public final Double min, max;
+        public final java.util.List<String> options;
+        public final boolean nullable;
+
+        private OptionRule(String type, Double min, Double max,
+                           java.util.List<String> options, boolean nullable) {
+            this.type = type;
+            this.min = min;
+            this.max = max;
+            this.options = options != null ? java.util.List.copyOf(options) : java.util.List.of();
+            this.nullable = nullable;
+        }
+
+        public static OptionRule slider(Double min, Double max) {
+            return new OptionRule("slider", min, max, null, false);
+        }
+
+        public static OptionRule select(java.util.List<String> options) {
+            return new OptionRule("select", null, null, options, false);
+        }
+
+        public static OptionRule color(boolean nullable) {
+            return new OptionRule("color", null, null, null, nullable);
+        }
+
+        public static OptionRule bool() {
+            return new OptionRule("boolean", null, null, null, false);
+        }
+
+        public static OptionRule keybind() {
+            return new OptionRule("keybind", null, null, null, false);
+        }
+
+        public static OptionRule text() {
+            return new OptionRule("text", null, null, null, false);
+        }
+    }
+
+    /** Source of {@link OptionRule}s, implemented against module definitions. */
+    public interface OptionSchema {
+        OptionRule ruleFor(String moduleId, String key);
+    }
+
+    private volatile OptionSchema optionSchema = null;
+
+    /** Wired once at startup (client owns the definitions). */
+    public void setOptionSchema(OptionSchema schema) {
+        this.optionSchema = schema;
+    }
     private static final java.util.Set<String> KNOWN_MODULE_KEYS = java.util.Set.of(
         "enabled", "x", "y", "scale", "opacity", "backgroundOpacity", "color",
         "background", "backgroundColor", "textColor", "format", "shadow",
@@ -619,6 +646,17 @@ public class ConfigManager {
         return null;
     }
 
+    /** Load-path string read: returns null for missing/null/non-string values instead of throwing. */
+    private static String safeString(JsonObject data, String key) {
+        try {
+            if (data.has(key) && data.get(key).isJsonPrimitive()
+                    && data.get(key).getAsJsonPrimitive().isString()) {
+                return data.get(key).getAsString();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     public synchronized void updateModule(String id, JsonObject data) {
         updateModule(id, data, true);
     }
@@ -637,15 +675,15 @@ public class ConfigManager {
         }
         if (cfg.custom == null) cfg.custom = new LinkedHashMap<>();
         cfg.enabled = getBool(data, "enabled", cfg.enabled);
-        cfg.x = getInt(data, "x", cfg.x);
-        cfg.y = getInt(data, "y", cfg.y);
+        cfg.x = Math.max(-10000, Math.min(10000, getInt(data, "x", cfg.x)));
+        cfg.y = Math.max(-10000, Math.min(10000, getInt(data, "y", cfg.y)));
         double scale = getDouble(data, "scale", cfg.scale);
-        if (scale > 0) cfg.scale = scale;
+        if (scale > 0) cfg.scale = Math.min(10.0, scale);
         double opacity = getDouble(data, "opacity", cfg.opacity);
         cfg.opacity = Math.max(0.2, Math.min(1.0, opacity == 0 ? 1.0 : opacity));
         cfg.backgroundOpacity = Math.max(0, Math.min(1, getDouble(data, "backgroundOpacity", cfg.backgroundOpacity)));
         String color = getString(data, "color");
-        if (color != null) cfg.color = color;
+        if (color != null && color.matches(HEX_PATTERN)) cfg.color = color;
         cfg.background = getBool(data, "background", cfg.background);
         String bgColor = getString(data, "backgroundColor");
         if (bgColor != null && bgColor.matches(HEX_PATTERN)) cfg.backgroundColor = bgColor;
@@ -690,7 +728,7 @@ public class ConfigManager {
         cfg.keystrokesShowS = getBool(data, "keystrokesShowS", cfg.keystrokesShowS);
         cfg.keystrokesShowD = getBool(data, "keystrokesShowD", cfg.keystrokesShowD);
         cfg.keystrokesShowCps = getBool(data, "keystrokesShowCps", cfg.keystrokesShowCps);
-        cfg.keystrokesGap = Math.max(0, getInt(data, "keystrokesGap", cfg.keystrokesGap));
+        cfg.keystrokesGap = Math.max(0, Math.min(64, getInt(data, "keystrokesGap", cfg.keystrokesGap)));
         cfg.keystrokesOutline = getBool(data, "keystrokesOutline", cfg.keystrokesOutline);
         if (data.has("keystrokesPressedColor")) {
             if (data.get("keystrokesPressedColor").isJsonNull()) cfg.keystrokesPressedColor = null;
@@ -769,7 +807,10 @@ public class ConfigManager {
         }
         // Unknown keys (future/plugin options): keep validated primitives so
         // new options round-trip without code changes. Keys are restricted to
-        // plain identifiers, strings capped, no objects/arrays.
+        // plain identifiers, strings capped, no objects/arrays. Declared
+        // options additionally enforce their definition schema (slider ranges,
+        // select allowlists, color hex) when a provider is wired.
+        OptionSchema schema = this.optionSchema;
         for (var entry : data.entrySet()) {
             String key = entry.getKey();
             if (KNOWN_MODULE_KEYS.contains(key)) continue;
@@ -782,21 +823,71 @@ public class ConfigManager {
                 double number = primitive.getAsDouble();
                 if (Double.isNaN(number) || Double.isInfinite(number)) continue;
             }
-            cfg.custom.put(key, value.deepCopy());
+            JsonElement store = value.deepCopy();
+            if (schema != null) {
+                try {
+                    OptionRule rule = schema.ruleFor(id, key);
+                    if (rule != null) {
+                        store = applyRule(rule, primitive);
+                        if (store == null) continue;
+                    }
+                } catch (Exception ignored) {}
+            }
+            cfg.custom.put(key, store);
         }
         if (save) save();
     }
 
+    /**
+     * Enforces one declared option rule on a patch value. Returns the value
+     * to store (possibly clamped), or null to drop the key.
+     */
+    private static JsonElement applyRule(OptionRule rule, com.google.gson.JsonPrimitive primitive) {
+        try {
+            switch (rule.type) {
+                case "slider" -> {
+                    if (!primitive.isNumber()) return null;
+                    double v = primitive.getAsDouble();
+                    if (Double.isNaN(v) || Double.isInfinite(v)) return null;
+                    if (rule.min != null) v = Math.max(rule.min, v);
+                    if (rule.max != null) v = Math.min(rule.max, v);
+                    return new com.google.gson.JsonPrimitive(v);
+                }
+                case "select" -> {
+                    if (!primitive.isString()) return null;
+                    return rule.options.contains(primitive.getAsString()) ? primitive.deepCopy() : null;
+                }
+                case "color" -> {
+                    if (!primitive.isString()) return null;
+                    String c = primitive.getAsString();
+                    if (c.isEmpty()) return rule.nullable ? primitive.deepCopy() : null;
+                    return c.matches(HEX_PATTERN) ? primitive.deepCopy() : null;
+                }
+                case "boolean" -> {
+                    return primitive.isBoolean() ? primitive.deepCopy() : null;
+                }
+                case "keybind" -> {
+                    return primitive.isNumber() ? primitive.deepCopy() : null;
+                }
+                default -> {
+                    return primitive.deepCopy();
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     public synchronized void importFromJson(JsonObject json) {
         if (json.has("accentColor")) {
-            String c = json.get("accentColor").getAsString();
+            String c = safeString(json, "accentColor");
             if (c != null && c.matches(HEX_PATTERN)) accentColor = c;
         }
         if (json.has("themeTextColor")) {
-            String c = json.get("themeTextColor").getAsString();
+            String c = safeString(json, "themeTextColor");
             if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
         } else if (json.has("textColor")) {
-            String c = json.get("textColor").getAsString();
+            String c = safeString(json, "textColor");
             if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
         }
         if (json.has("modules") && json.get("modules").isJsonObject()) {
@@ -810,11 +901,20 @@ public class ConfigManager {
                     if (cfg == null) cfg = new ModuleConfig();
                     if (cfg.custom == null) cfg.custom = new LinkedHashMap<>();
                     // Pull flattened custom keys back in (toJson flattens).
+                    // Same guards as updateModule: plain identifiers, strings
+                    // capped, no objects/arrays, finite numbers only.
                     for (var f : obj.entrySet()) {
                         String key = f.getKey();
                         if ("custom".equals(key) || isKnownModuleKey(key)) continue;
+                        if (!key.matches("[A-Za-z][A-Za-z0-9_]{0,63}")) continue;
                         var value = f.getValue();
                         if (value != null && value.isJsonPrimitive()) {
+                            var primitive = value.getAsJsonPrimitive();
+                            if (primitive.isString() && primitive.getAsString().length() > 512) continue;
+                            if (primitive.isNumber()) {
+                                double number = primitive.getAsDouble();
+                                if (Double.isNaN(number) || Double.isInfinite(number)) continue;
+                            }
                             cfg.custom.put(key, value.deepCopy());
                         }
                     }
@@ -822,7 +922,8 @@ public class ConfigManager {
                 } catch (Exception ignored) {}
             }
         }
-        ensureDefaults(false);
+        // Missing modules are seeded from definitions by the caller's
+        // post-import applyOptionDefaults (see NetworkPackets onImport hook).
         fillMissingDefaults();
         this.root = json.deepCopy();
         save();

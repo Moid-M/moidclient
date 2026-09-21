@@ -56,6 +56,11 @@ public class ConfigManagerTest {
     @Test
     public void explicitFieldsWinOverStaleCustomDupes() throws Exception {
         ConfigManager config = freshManager();
+        // Modules are seeded from definitions (no hardcoded ids here), so
+        // create it the same way a dashboard patch would.
+        JsonObject patch = new JsonObject();
+        patch.addProperty("zoomLevel", 4.0);
+        config.updateModule("zoom", patch);
         config.getModule("zoom").custom.put("zoomLevel", new com.google.gson.JsonPrimitive(999.0));
         JsonObject mod = config.toJson().getAsJsonObject("modules").getAsJsonObject("zoom");
         assertEquals(config.getModule("zoom").zoomLevel, mod.get("zoomLevel").getAsDouble(), 0.0001);

@@ -19,7 +19,7 @@ public final class TelemetryBlockManager {
         return new ModuleDef("telemetryBlock", "Block Mojang Telemetry",
                 "Blocks Mojang telemetry events (on by default).",
                 "utility", false, "shield", false,
-                ModuleOption.list());
+                ModuleOption.list()).withDefaultEnabled(true);
     }
 
     /**

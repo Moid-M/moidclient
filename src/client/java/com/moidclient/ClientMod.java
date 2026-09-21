@@ -52,9 +52,16 @@ public class ClientMod implements ClientModInitializer {
 
         // 1) Config + schema defaults declared in module definitions
         configManager = new ConfigManager();
+        // Definitions own validation + seeding from here on: patches enforce
+        // declared slider/select/color rules, no per-module code in config.
+        configManager.setOptionSchema(ModuleRegistry::schemaFor);
         try { statsRecorder = new com.moidclient.stats.StatsRecorder(); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init stats", e); }
         try { ModuleRegistry.applyOptionDefaults(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to apply option defaults", e); }
         networkPackets = new NetworkPackets(configManager);
+        // Imports converge the same way startup does (seed missing modules).
+        networkPackets.setOnImport(() -> {
+            try { ModuleRegistry.applyOptionDefaults(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to apply option defaults after import", e); }
+        });
         // 1b) HUD (ping display etc) - register before server
         try { HudManager.init(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init HUD", e); }
         try { BlockOutlineRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Block Outline", e); }
@@ -123,7 +130,11 @@ public class ClientMod implements ClientModInitializer {
                 Minecraft mc = Minecraft.getInstance();
                 if (mc != null && player != null && player == mc.player && entity != null) {
                     net.minecraft.world.phys.Vec3 eye = player.getEyePosition();
-                    net.minecraft.world.phys.Vec3 hit = hitResult != null ? hitResult.getLocation() : entity.position();
+                    // EntityHitResult carries the exact hit point; the fallback
+                    // uses chest height (not feet) so a missing result can't
+                    // overestimate by up to ~1.6 blocks at point blank.
+                    net.minecraft.world.phys.Vec3 hit = hitResult != null ? hitResult.getLocation()
+                            : entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
                     com.moidclient.hud.combat.CombatTracker.onAttack(eye.distanceTo(hit));
                 }
             } catch (Exception ignored) {}
@@ -155,6 +166,18 @@ public class ClientMod implements ClientModInitializer {
             // stats history (1Hz): record locally even with no dashboard open
             if (++statsTick % 20 == 0) {
                 try {
+                    // Context transitions are tracked even while disabled, so
+                    // the history never merges separate play sessions into one.
+                    try {
+                        if (statsRecorder != null) {
+                            String label = null;
+                            if (client != null && (client.level != null || client.getConnection() != null)) {
+                                label = com.moidclient.hud.server.ServerHud.currentAddress();
+                            }
+                            statsRecorder.noteContext(client != null ? client.level : null,
+                                    client != null ? client.getConnection() : null, label);
+                        }
+                    } catch (Exception ignored) {}
                     var statMod = configManager.getModule("statistics");
                     if (statMod != null && statMod.enabled && statsRecorder != null) {
                         int ping = 0, fps = 0;
@@ -168,14 +191,6 @@ public class ClientMod implements ClientModInitializer {
                             mem = (rt.totalMemory() - rt.freeMemory()) / 1024 / 1024;
                         } catch (Exception ignored) {}
                         statsRecorder.recordSample(fps, ping, tps, mem);
-                        String label = null;
-                        try {
-                            if (client != null && (client.level != null || client.getConnection() != null)) {
-                                label = com.moidclient.hud.server.ServerHud.currentAddress();
-                            }
-                            statsRecorder.noteContext(client != null ? client.level : null,
-                                    client != null ? client.getConnection() : null, label);
-                        } catch (Exception ignored) {}
                         statsRecorder.maybeSave();
                     }
                 } catch (Exception e) { LOGGER.error("[MoidClient] Stats tick failed", e); }

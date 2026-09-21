@@ -25,6 +25,12 @@ public class NetworkPackets {
     private final ConfigManager config;
     private final Set<WsContext> sessions = ConcurrentHashMap.newKeySet();
     private volatile JsonObject lastWindowSize = null;
+    /** Runs after an import is applied (lets the caller converge defaults). */
+    private volatile Runnable onImport = null;
+
+    public void setOnImport(Runnable r) {
+        this.onImport = r;
+    }
     // Flood guard: sustained full-serialize + broadcast per message is cheap
     // for a dashboard but not for a tight loop. Burst 30/s per session.
     private static final int RATE_MAX_PER_SEC = 30;
@@ -67,7 +73,7 @@ public class NetworkPackets {
                 LOGGER.warn("[MoidClient] WS {} too large ({}), dropped", type, message.length());
                 return;
             }
-            if (!"PING".equals(type) && !checkRate(ctx, "PREVIEW_MODULE".equals(type) ? 60 : RATE_MAX_PER_SEC)) {
+            if (!checkRate(ctx, "PREVIEW_MODULE".equals(type) ? 60 : RATE_MAX_PER_SEC)) {
                 LOGGER.warn("[MoidClient] WS flood from {}, patch dropped", ctx.sessionId());
                 return;
             }
@@ -147,6 +153,11 @@ public class NetworkPackets {
         if (!json.has("data")) return;
         JsonObject data = json.getAsJsonObject("data");
         config.importFromJson(data);
+        try {
+            if (onImport != null) onImport.run();
+        } catch (Exception e) {
+            LOGGER.warn("[MoidClient] Post-import hook failed", e);
+        }
         broadcastSync();
     }
 

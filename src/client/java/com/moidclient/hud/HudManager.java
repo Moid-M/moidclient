@@ -25,10 +25,13 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
  */
 public final class HudManager {
     private static ConfigManager config;
+    private static boolean initialized = false;
 
     private HudManager() {}
 
     public static void init(ConfigManager cfg) {
+        if (initialized) return;
+        initialized = true;
         config = cfg;
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "ping_hud"), (graphics, deltaTracker) -> PingHud.render(graphics, deltaTracker, config));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("moidclient", "fps_hud"), (graphics, deltaTracker) -> FpsHud.render(graphics, deltaTracker, config));

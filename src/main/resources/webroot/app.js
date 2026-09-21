@@ -644,7 +644,7 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
       <div class="flex gap-2 items-center">
         <div class="w-6 h-6 rounded-full border shrink-0" style="background:${dotBg};border-color:var(--border); ${checker}" data-color-preview="${ck}"></div>
         <input data-field="${key}" data-id="${id}" value="${escAttr(cur)}" placeholder="${escAttr(placeholder || '#RRGGBB')}" spellcheck="false" class="field-input flex-1 px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
-        ${nullable ? `<button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=${key}]').value=''; this.closest('[data-id]').querySelector('[data-field=${key}]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>` : ''}
+        ${nullable ? `<button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=&quot;${key}&quot;]').value=''; this.closest('[data-id]').querySelector('[data-field=&quot;${key}&quot;]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>` : ''}
         <button class="picker-icon-btn" data-color-picker-toggle="${ck}" title="Color picker">${PICKER_ICON_SVG}</button>
       </div>
       ${pickerPanelHtml(ck, withAlpha)}
@@ -756,8 +756,8 @@ function cardTemplate(id,meta,data,animate){
       <div class="flex gap-3 flex-1 min-w-0">
         <div class="icon-box w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background:var(--bg);border:1px solid var(--border)">${icon}</div>
         <div class="min-w-0">
-          <div class="card-title font-medium text-[13.5px] leading-none truncate" style="color:var(--text-bright);transition: color 180ms">${meta.name}</div>
-          <div class="text-xs mt-1 leading-snug" style="color:var(--text-muted)">${meta.desc}</div>
+          <div class="card-title font-medium text-[13.5px] leading-none truncate" style="color:var(--text-bright);transition: color 180ms">${escAttr(meta.name)}</div>
+          <div class="text-xs mt-1 leading-snug" style="color:var(--text-muted)">${escAttr(meta.desc)}</div>
         </div>
       </div>
       <div class="toggle ${enabled?'active':''}" data-toggle="${id}" title="Toggle"><div class="toggle-dot"></div></div>
@@ -765,7 +765,7 @@ function cardTemplate(id,meta,data,animate){
     <div class="drawer ${isFocused?'open':''}" data-drawer="${id}">
       <div class="space-y-4 pt-2">
         <div class="focus-bar" style="${isFocused?'':'display:none'}">
-          <span class="text-xs font-medium" style="color:var(--text-muted)">Configuring <span style="color:var(--text-bright)">${meta.name}</span></span>
+          <span class="text-xs font-medium" style="color:var(--text-muted)">Configuring <span style="color:var(--text-bright)">${escAttr(meta.name)}</span></span>
           <button class="text-xs px-2.5 py-1 rounded-full border font-medium" style="border-color:var(--border);background:var(--card);color:var(--text-muted)" data-back="${id}">← Back</button>
         </div>
         ${overlay?`<div class="text-[11px] px-3 py-2 rounded-full border flex items-center gap-2" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">Position edited in <button class="underline" style="color:var(--accent)" onclick="document.querySelector('[data-tab=editor]').click()">HUD Editor</button> • <span style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${data.x}, ${data.y}</span></div>`:''}
@@ -800,17 +800,23 @@ function render(animate=false){
   }
   const gridsByCat={hud:hudGrid, visuals:visualsGrid, utility:utilitiesGrid};
   const allIds=MODULE_ORDER;
+  // Custom categories (e.g. future plugin sections) have no dedicated tab:
+  // their cards fall back to the HUD grid, and the All tab groups them by
+  // name automatically. Track the focused card's real grid so focus mode
+  // below never hides it.
+  let focusGrid=null;
   for(const id of allIds){
     if(focusedId && focusedId!==id) continue;
     const meta=MODULES_META[id];
     const data=(config.modules&&config.modules[id])||{enabled:false,x:10,y:10,scale:1,opacity:1};
     const html=cardTemplate(id,meta,data,shouldAnimate);
     const target=gridsByCat[meta.cat]||hudGrid;
+    if(id===focusedId) focusGrid=target;
     target.insertAdjacentHTML('beforeend',html);
   }
   // all tab - grouped into foldable category sections, filtered by search
   const CAT_NAMES = {hud:'HUD Overlays', visuals:'Visuals', utility:'Utility'};
-  function catName(cat){ return CAT_NAMES[cat] || (cat.charAt(0).toUpperCase()+cat.slice(1)); }
+  function catName(cat){ return CAT_NAMES[cat] || escAttr(cat.charAt(0).toUpperCase()+cat.slice(1)); }
   if(allGrid){
     const allIdsAll = MODULE_ORDER.filter(id=>{
       if(!searchQuery) return true;
@@ -877,8 +883,7 @@ function render(animate=false){
     const noRes=document.querySelector('#noResults'); if(noRes) noRes.classList.toggle('hidden', allIdsAll.length>0);
   }
   if(focusedId){
-    const cat=MODULES_META[focusedId].cat;
-    for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display=(k===cat)?'':'none';
+    for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display=(gridsByCat[k]===focusGrid)?'':'none';
   } else {
     for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display='';
   }
@@ -1048,7 +1053,7 @@ function render(animate=false){
   });
   $$('input[data-field]').forEach(inp=>{
     const isRange = inp.type==='range';
-    const handler=()=>{
+    const handler=(preview)=>{
       const id=inp.getAttribute('data-id'); const field=inp.getAttribute('data-field');
       let val;
       if(inp.type==='checkbox') val=inp.checked;
@@ -1056,7 +1061,9 @@ function render(animate=false){
       else if(field==='shadow' || field==='background') val=inp.checked;
       else if(inp.type==='range') val=parseFloat(inp.value);
       else val=inp.value;
-      const patch={}; patch[field]=val; send({type:'UPDATE_MODULE',id,data:patch});
+      // Sliders drag at 60Hz: previews stay memory-only (no save/broadcast
+      // storm, no flood-guard drops); the release sends the saving update.
+      const patch={}; patch[field]=val; send({type:preview?'PREVIEW_MODULE':'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]=config.modules[id]||{x:10,y:10,scale:1,opacity:1,enabled:false}; m[field]=val;
       const card=inp.closest('.card');
       if(card){
@@ -1072,10 +1079,10 @@ function render(animate=false){
     };
     if(isRange){
       inp.addEventListener('pointerdown',()=> isDraggingSlider=true);
-      inp.addEventListener('pointerup',()=> { isDraggingSlider=false; handler(); });
+      inp.addEventListener('pointerup',()=> { isDraggingSlider=false; handler(false); });
       inp.addEventListener('input', ()=>{
         isDraggingSlider=true;
-        handler();
+        handler(true);
         updateSliderFill(inp);
         const id=inp.getAttribute('data-id'); const field=inp.getAttribute('data-field');
         const card=inp.closest('.card');
@@ -1084,7 +1091,7 @@ function render(animate=false){
           if(lbl) lbl.textContent = field==='scale' ? parseFloat(inp.value).toFixed(2)+'x' : parseFloat(inp.value).toFixed(2);
         }
       });
-      inp.addEventListener('change', handler);
+      inp.addEventListener('change', ()=>handler(false));
     } else if(inp.type==='checkbox'){
       inp.addEventListener('change', handler);
     } else {
@@ -1428,7 +1435,7 @@ function setupStatsHover(id){
     tp.style.top=Math.max(4,y-12)+'px';
     let evTxt='';
     for(const ev of g.events){
-      if(Math.abs(ev.t-s.t)<2000){ evTxt='<div style="opacity:0.75">'+ev.type+' · '+(ev.where||'')+'</div>'; break; }
+      if(Math.abs(ev.t-s.t)<2000){ evTxt='<div style="opacity:0.75">'+escAttr(ev.type)+' · '+escAttr(ev.where||'')+'</div>'; break; }
     }
     tp.innerHTML='<div style="opacity:0.6;font-size:11px">'+(g.label||'')+'</div><div style="font-size:15px;font-weight:600">'+g.fmt(v)+'</div><div style="opacity:0.75">'+fmtTime(s.t)+'</div>'+evTxt;
   });
