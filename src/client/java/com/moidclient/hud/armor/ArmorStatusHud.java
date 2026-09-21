@@ -81,7 +81,9 @@ public final class ArmorStatusHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, layout.w() + 3, layout.h() + 3, bg);
             }
             for (Placed p : layout.items()) {
@@ -168,12 +170,14 @@ public final class ArmorStatusHud {
                 cursorY += itemH + (stacked ? 6 : 0);
             }
         }
+        // Content size derives from the final cursor: gaps exist between
+        // items (n-1 of them), not inside the summed widths.
         if (horizontal) {
-            boxW = Math.max(0, boxW - 8);
+            boxW = Math.max(0, cursorX - 8);
         } else if (stacked) {
-            boxH = Math.max(0, boxH - 6);
+            boxH = Math.max(0, cursorY - 6);
         } else {
-            boxH = Math.max(0, boxH - 2);
+            boxH = Math.max(0, cursorY);
         }
         return new Layout(items, boxW, boxH);
     }
@@ -239,11 +243,13 @@ public final class ArmorStatusHud {
 
     private static int rowColor(ConfigManager.ModuleConfig mod, ItemStack stack) {
         double frac = durabilityFraction(stack);
-        if (mod.armorDynamicColor && frac >= 0) {
-            return healthColor(frac, mod.opacity);
-        }
+        // low-durability warning wins over the gradient so it stays visible
+        // when both options are on.
         if (mod.armorLowWarn && frac >= 0 && frac < 0.1) {
             return ColorUtil.parseHex("#EF4444", mod.opacity);
+        }
+        if (mod.armorDynamicColor && frac >= 0) {
+            return healthColor(frac, mod.opacity);
         }
         if (mod.textColor != null && !mod.textColor.isEmpty()) {
             try { return ColorUtil.parseHex(mod.textColor, mod.opacity); } catch (Exception e) { /* fall through */ }

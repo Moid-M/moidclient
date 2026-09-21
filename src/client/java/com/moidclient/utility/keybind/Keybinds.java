@@ -39,8 +39,11 @@ public final class Keybinds {
             if (last != null && last == code) return;
             int nativeCode = NativeKeys.toNative(code);
             int live = KeybindUtil.readCode(mapping);
+            // Transient read failure: record nothing so the push is retried
+            // next tick instead of being suppressed forever.
+            if (live < 0) return;
             LAST_PUSHED.put(mapping, code);
-            if (live < 0 || live == nativeCode) return;
+            if (live == nativeCode) return;
             mapping.setKey(NativeKeys.keyType().getOrCreate(nativeCode));
             try { KeyMapping.resetMapping(); } catch (Exception ignored) {}
             try { mc.options.save(); } catch (Exception ignored) {}
@@ -53,6 +56,23 @@ public final class Keybinds {
      */
     public static void noteApplied(KeyMapping mapping, int code) {
         if (mapping != null) LAST_PUSHED.put(mapping, code);
+    }
+
+    /**
+     * Boot path: pushes a saved dashboard code into a freshly registered
+     * vanilla mapping. Client entrypoints run before GameOptions loads
+     * options.txt, so the mapping still holds its constructor default here —
+     * reading it back into config would wipe every custom bind on restart.
+     * The push is recorded so the per-tick forward sync doesn't fight it.
+     */
+    public static void adoptConfig(KeyMapping mapping, int code) {
+        try {
+            if (mapping == null || code <= 0) return;
+            int nativeCode = NativeKeys.toNative(code);
+            mapping.setKey(NativeKeys.keyType().getOrCreate(nativeCode));
+            try { KeyMapping.resetMapping(); } catch (Exception ignored) {}
+            LAST_PUSHED.put(mapping, code);
+        } catch (Exception ignored) {}
     }
 
     /**

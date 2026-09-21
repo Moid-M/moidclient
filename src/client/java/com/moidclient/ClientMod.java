@@ -42,6 +42,10 @@ public class ClientMod implements ClientModInitializer {
     private int windowTick=0;
     private int liveTick=0;
     private int keySyncTick=0;
+    private int statsTick=0;
+    private com.moidclient.stats.StatsRecorder statsRecorder;
+    private com.moidclient.update.UpdateManager updateManager;
+    private volatile boolean pendingUpdateRestart = false;
 
     @Override
     public void onInitializeClient() {
@@ -50,15 +54,29 @@ public class ClientMod implements ClientModInitializer {
 
         // 1) Config + schema defaults declared in module definitions
         configManager = new ConfigManager();
+        // Definitions own validation + seeding from here on: patches enforce
+        // declared slider/select/color rules, no per-module code in config.
+        configManager.setOptionSchema(ModuleRegistry::schemaFor);
+        try { statsRecorder = new com.moidclient.stats.StatsRecorder(); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init stats", e); }
         try { ModuleRegistry.applyOptionDefaults(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to apply option defaults", e); }
         networkPackets = new NetworkPackets(configManager);
+        // Imports converge the same way startup does (seed missing modules).
+        networkPackets.setOnImport(() -> {
+            try { ModuleRegistry.applyOptionDefaults(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to apply option defaults after import", e); }
+        });
         // 1b) HUD (ping display etc) - register before server
         try { HudManager.init(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init HUD", e); }
         try { BlockOutlineRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Block Outline", e); }
         try { HitboxRenderer.register(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Failed to init Hitboxes", e); }
 
         // 2) Server (dynamic port binding + asset serving + WS)
-        serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson);
+        serverManager = new ServerManager(configManager, networkPackets, ModuleRegistry::toJson, statsRecorder);
+        // 2b) Self-updater: janitor first (completes interrupted swaps),
+        // then wire status/restart into the dashboard server.
+        updateManager = new com.moidclient.update.UpdateManager(networkPackets);
+        try { updateManager.runStartupJanitor(); } catch (Exception e) { LOGGER.error("[MoidClient] Update janitor failed", e); }
+        serverManager.setUpdateManager(updateManager);
+        serverManager.setRestartHook(this::requestUpdateRestart);
         try {
             serverManager.start();
         } catch (Exception e) {
@@ -92,29 +110,54 @@ public class ClientMod implements ClientModInitializer {
                     com.moidclient.utility.keybind.NativeKeys.GLFW_KEY_LEFT_ALT),
                 moidCategory
         ));
-        // Controls screen is master on boot: adopt live bindings into config
-        // (translated back to dashboard/GLFW numbering).
+        // Config (dashboard) is master on boot: these vanilla mappings were
+        // just constructed with defaults — client entrypoints run before
+        // GameOptions loads options.txt — so push the saved codes in.
+        // Reading the live defaults back here would wipe custom binds on
+        // every restart. Controls rebinds during play are still adopted by
+        // the per-second reverse sync below.
         try {
             var zoomMod = configManager.getModule("zoom");
-            if (zoomMod != null) {
-                int live = com.moidclient.util.KeybindUtil.readCode(zoomKey);
-                if (live > 0) zoomMod.zoomKey = com.moidclient.utility.keybind.NativeKeys.fromNative(live);
-            }
+            if (zoomMod != null) com.moidclient.utility.keybind.Keybinds.adoptConfig(zoomKey, zoomMod.zoomKey);
             var freelookMod = configManager.getModule("freelook");
-            if (freelookMod != null) {
-                int live = com.moidclient.util.KeybindUtil.readCode(freeLookKey);
-                if (live > 0) freelookMod.freelookKey = com.moidclient.utility.keybind.NativeKeys.fromNative(live);
-            }
+            if (freelookMod != null) com.moidclient.utility.keybind.Keybinds.adoptConfig(freeLookKey, freelookMod.freelookKey);
             configManager.save();
         } catch (Exception e) { LOGGER.error("[MoidClient] Failed to adopt keybinds", e); }
 
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             try { PerspectiveSkipManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] PerspectiveSkip tick failed", e); }
         });
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            try { if (statsRecorder != null) statsRecorder.saveAndClose(); } catch (Exception ignored) {}
+        });
+
+        // Combat hook (combo/reach HUDs): Fabric attack event, client side.
+        // Returning PASS never interferes - we only observe.
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            try {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc != null && player != null && player == mc.player && entity != null) {
+                    net.minecraft.world.phys.Vec3 eye = player.getEyePosition();
+                    // EntityHitResult carries the exact hit point; the fallback
+                    // uses chest height (not feet) so a missing result can't
+                    // overestimate by up to ~1.6 blocks at point blank.
+                    net.minecraft.world.phys.Vec3 hit = hitResult != null ? hitResult.getLocation()
+                            : entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+                    com.moidclient.hud.combat.CombatTracker.onAttack(eye.distanceTo(hit));
+                }
+            } catch (Exception ignored) {}
+            return net.minecraft.world.InteractionResult.PASS;
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (openGuiKey.consumeClick()) {
+            if (openGuiKey != null) while (openGuiKey.consumeClick()) {
                 openWebGui();
+            }
+            // Update restart requested from the dashboard: the watcher script
+            // is already detached, so stop cleanly on the client thread.
+            if (pendingUpdateRestart && client != null) {
+                pendingUpdateRestart = false;
+                try { client.stop(); } catch (Exception e) { LOGGER.error("[MoidClient] Update restart stop failed", e); }
             }
             // window size broadcast for HUD editor rectangle preview (throttled 10 ticks)
             if (++windowTick % 10 == 0 && client != null && client.getWindow() != null) {
@@ -133,9 +176,45 @@ public class ClientMod implements ClientModInitializer {
             }
             // cps tracking (every tick) with logging
             try { CpsHud.onTick(); } catch (Exception e) { LOGGER.error("[MoidClient] Cps tick failed", e); }
+            try { com.moidclient.hud.combat.CombatTracker.onTick(client); } catch (Exception e) { LOGGER.error("[MoidClient] Combat tick failed", e); }
+            // stats history (1Hz): record locally even with no dashboard open
+            if (++statsTick % 20 == 0) {
+                try {
+                    // Context transitions are tracked even while disabled, so
+                    // the history never merges separate play sessions into one.
+                    try {
+                        if (statsRecorder != null) {
+                            String label = null;
+                            if (client != null && (client.level != null || client.getConnection() != null)) {
+                                label = com.moidclient.hud.server.ServerHud.currentAddress();
+                            }
+                            statsRecorder.noteContext(client != null ? client.level : null,
+                                    client != null ? client.getConnection() : null, label);
+                        }
+                    } catch (Exception ignored) {}
+                    var statMod = configManager.getModule("statistics");
+                    if (statMod != null && statMod.enabled && statsRecorder != null) {
+                        int ping = 0, fps = 0;
+                        double tps = 20.0;
+                        try { ping = HudManager.getCurrentPing(); } catch (Exception ignored) {}
+                        try { fps = HudManager.getCurrentFps(); } catch (Exception ignored) {}
+                        try { tps = com.moidclient.hud.tps.TpsHud.getCurrentTps(); } catch (Exception ignored) {}
+                        long mem = 0;
+                        try {
+                            Runtime rt = Runtime.getRuntime();
+                            mem = (rt.totalMemory() - rt.freeMemory()) / 1024 / 1024;
+                        } catch (Exception ignored) {}
+                        statsRecorder.recordSample(fps, ping, tps, mem);
+                        statsRecorder.maybeSave();
+                    }
+                } catch (Exception e) { LOGGER.error("[MoidClient] Stats tick failed", e); }
+            }
             try { FullbrightManager.onTick(configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Fullbright tick failed", e); }
             try { com.moidclient.utility.zoom.ZoomManager.onTick(client, configManager, zoomKey); } catch (Exception e) { LOGGER.error("[MoidClient] Zoom tick failed", e); }
             try { com.moidclient.utility.freelook.FreeLookManager.onTick(client, configManager, freeLookKey); } catch (Exception e) { LOGGER.error("[MoidClient] FreeLook tick failed", e); }
+            try { com.moidclient.utility.togglesprint.ToggleSprintManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] ToggleSprint tick failed", e); }
+            try { com.moidclient.utility.togglesneak.ToggleSneakManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] ToggleSneak tick failed", e); }
+            try { com.moidclient.utility.autohide.AutohideManager.onTick(client, configManager); } catch (Exception e) { LOGGER.error("[MoidClient] Autohide tick failed", e); }
             // reverse keybind sync (Controls -> dashboard), throttled 1s:
             // adopt live bindings changed in-game so the dashboard follows.
             if (++keySyncTick % 20 == 0) {
@@ -173,7 +252,40 @@ public class ClientMod implements ClientModInitializer {
         });
         // schedule initial window size probe without raw Thread - use tick counter
         // will be sent on next tick where window is available (handled via windowTick counter)
-        LOGGER.info("[MoidClient] Initialized. Press [K] to open Web Dashboard at {}", serverManager.getBaseUrl());
+        String baseUrl = serverManager.getActivePort() == -1 ? "server failed to start (see log)" : serverManager.getBaseUrl();
+        LOGGER.info("[MoidClient] Initialized. Press [K] to open Web Dashboard at {}", baseUrl);
+    }
+
+    /**
+     * Dashboard "Restart now": launches the detached watcher script (it swaps
+     * the jars after this process exits) and stops the game cleanly. The
+     * actual stop happens on the next client tick - see END_CLIENT_TICK.
+     * ProcessBuilder arg arrays only, no shell involved.
+     */
+    private void requestUpdateRestart() {
+        try {
+            if (updateManager == null || updateManager.stagedFileName() == null) {
+                LOGGER.warn("[MoidClient] Restart requested with nothing staged");
+                return;
+            }
+            java.nio.file.Path script = updateManager.writeRestartScript();
+            String pid = String.valueOf(ProcessHandle.current().pid());
+            new ProcessBuilder("powershell", "-WindowStyle", "Hidden",
+                    "-ExecutionPolicy", "Bypass", "-File", script.toString(),
+                    pid,
+                    com.moidclient.update.UpdateManager.modsDir().toString(),
+                    com.moidclient.update.UpdateManager.stageDir().toString(),
+                    updateManager.stagedFileName(),
+                    com.moidclient.update.UpdateManager.resultFile().toString())
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            updateManager.markRestarting();
+            pendingUpdateRestart = true;
+            LOGGER.info("[MoidClient] Update restart armed, stopping game");
+        } catch (Exception e) {
+            LOGGER.error("[MoidClient] Update restart failed", e);
+        }
     }
 
     public void openWebGui() {
@@ -238,13 +350,6 @@ public class ClientMod implements ClientModInitializer {
                 open3.invoke(os3, url);
                 return true;
             } catch (NoSuchMethodException ignored) {}
-
-            // Try enum OS field
-            for (var f : utilClass.getDeclaredFields()) {
-                if (f.getType().getSimpleName().equals("OperatingSystem") || f.getType().getSimpleName().equals("OS")) {
-                    // static instance
-                }
-            }
         } catch (Exception e) {
             LOGGER.debug("[MoidClient] Util.open fallback failed: {}", e.getMessage());
         }

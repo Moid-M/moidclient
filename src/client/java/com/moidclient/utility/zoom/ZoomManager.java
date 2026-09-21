@@ -47,24 +47,46 @@ public final class ZoomManager {
                 ));
     }
 
-    private static double baseFov = -1;
-    private static double targetFov = -1;
-    private static double currentFov = -1;
-    private static double originalSens = -1;
-    private static boolean held = false;
-    private static boolean animOut = false;
-    private static boolean smoothIn = true;
-    private static boolean smoothOut = true;
-    private static double speed = 0.4;
+    // Tick thread writes, render thread (CameraMixin) reads: volatile for
+    // visibility (double tearing would corrupt the FOV mid-frame).
+    private static volatile double baseFov = -1;
+    private static volatile double targetFov = -1;
+    private static volatile double currentFov = -1;
+    private static volatile double originalSens = -1;
+    private static volatile boolean held = false;
+    private static volatile boolean animOut = false;
+    private static volatile boolean smoothIn = true;
+    private static volatile boolean smoothOut = true;
+    private static volatile double speed = 0.4;
     private static boolean accessorWarned = false;
+    // Cached option handles: resolving them walks reflection (methods, fields,
+    // superclass scans) - redo only when the options holder identity changes.
+    // A null handle is NOT cached, so a failed lookup keeps retrying.
+    private static Object lastOptions = null;
+    private static OptionAccess cachedFov = null;
+    private static OptionAccess cachedSens = null;
+
+    private static OptionAccess fovAccess(Object options) {
+        if (options == null) return null;
+        if (options != lastOptions) { lastOptions = options; cachedFov = null; cachedSens = null; }
+        if (cachedFov == null) cachedFov = OptionAccess.find(options, "fov", "getFov");
+        return cachedFov;
+    }
+
+    private static OptionAccess sensAccess(Object options) {
+        if (options == null) return null;
+        if (options != lastOptions) { lastOptions = options; cachedFov = null; cachedSens = null; }
+        if (cachedSens == null) cachedSens = OptionAccess.find(options, "sensitivity", "getSensitivity");
+        return cachedSens;
+    }
     // Scroll/cinematic state, refreshed every tick (mixins read these).
-    private static boolean moduleEnabled = false;
-    private static boolean scrollAdjust = true;
-    private static double scrollStep = 1.0;
-    private static double minLevel = 1.5;
-    private static double maxLevel = 10.0;
-    private static boolean cinematic = false;
-    private static boolean levelDirty = false;
+    private static volatile boolean moduleEnabled = false;
+    private static volatile boolean scrollAdjust = true;
+    private static volatile double scrollStep = 1.0;
+    private static volatile double minLevel = 1.5;
+    private static volatile double maxLevel = 10.0;
+    private static volatile boolean cinematic = false;
+    private static volatile boolean levelDirty = false;
     private static ConfigManager.ModuleConfig lastMod = null;
 
     /**
@@ -92,8 +114,7 @@ public final class ZoomManager {
         if (smoothOut && animOut && baseFov > 0 && currentFov > 0) {
             currentFov += (baseFov - currentFov) * factor;
             if (Math.abs(baseFov - currentFov) < 0.3) {
-                currentFov = baseFov;
-                animOut = false;
+                snapInactive();
                 return -1f;
             }
             return (float) currentFov;
@@ -159,6 +180,16 @@ public final class ZoomManager {
             }
             moduleEnabled = true;
             lastMod = mod;
+            smoothIn = mod.zoomSmooth;
+            smoothOut = mod.zoomSmoothOut;
+            speed = mod.zoomSmoothSpeed <= 0 ? 0.4 : Math.max(0.05, Math.min(1.0, mod.zoomSmoothSpeed));
+            // Snapshot refreshed every tick (even while released) so the
+            // first press after a dashboard change uses fresh values.
+            scrollAdjust = mod.zoomScrollAdjust;
+            scrollStep = mod.zoomScrollStep <= 0 ? 1.0 : Math.max(0.25, Math.min(2.0, mod.zoomScrollStep));
+            minLevel = mod.zoomMinLevel;
+            maxLevel = mod.zoomMaxLevel;
+            cinematic = mod.zoomCinematic;
             boolean toggleMode = "toggle".equals(mod.zoomMode);
             // Dashboard is the remote: push its binding into the vanilla
             // mapping (visible + rebindable in Controls, persisted by vanilla).
@@ -179,12 +210,7 @@ public final class ZoomManager {
             }
 
             double level = clampLevel(mod.zoomLevel <= 0 ? 4.0 : mod.zoomLevel);
-            scrollAdjust = mod.zoomScrollAdjust;
-            scrollStep = mod.zoomScrollStep <= 0 ? 1.0 : Math.max(0.25, Math.min(2.0, mod.zoomScrollStep));
-            minLevel = mod.zoomMinLevel;
-            maxLevel = mod.zoomMaxLevel;
-            cinematic = mod.zoomCinematic;
-            OptionAccess fov = OptionAccess.find(mc.options, "fov", "getFov");
+            OptionAccess fov = fovAccess(mc.options);
             if (fov == null) {
                 if (!accessorWarned) {
                     accessorWarned = true;
@@ -199,9 +225,12 @@ public final class ZoomManager {
                 return;
             }
             if (baseFov < 0) {
-                baseFov = base;
                 LOGGER.debug("[MoidClient/Zoom] engaged: baseFov={} level={} key={}", base, level, mod.zoomKey);
             }
+            // Re latch every tick while held: the FOV option is never written
+            // by zoom (only the computed frame FOV is overwritten), so any
+            // change here is the user's own slider move and must be honored.
+            baseFov = base;
             // Recomputed every tick (not just on engage) so scroll-adjust
             // takes effect while held.
             targetFov = Math.max(1.0, base / level);
@@ -209,7 +238,7 @@ public final class ZoomManager {
             animOut = false;
 
             if (mod.zoomLowerSensitivity) {
-                OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
+                OptionAccess sens = sensAccess(mc.options);
                 if (sens != null) {
                     if (originalSens < 0) originalSens = sens.getAsDouble();
                     sens.setFromDouble(Math.max(0.01, originalSens / level));
@@ -229,19 +258,21 @@ public final class ZoomManager {
 
     /** Restores the user's sensitivity (FOV option was never touched). */
     private static void restoreSens(Minecraft mc) {
-        if (originalSens < 0) {
-            originalSens = -1;
-            return;
-        }
+        if (originalSens < 0) return;
+        // Clear only after a successful write: if mc/options is momentarily
+        // unavailable the saved value is kept so a later tick can retry
+        // instead of losing it (and leaving sensitivity lowered).
         try {
             if (mc != null && mc.options != null) {
-                OptionAccess sens = OptionAccess.find(mc.options, "sensitivity", "getSensitivity");
-                if (sens != null) sens.setFromDouble(originalSens);
+                OptionAccess sens = sensAccess(mc.options);
+                if (sens != null) {
+                    sens.setFromDouble(originalSens);
+                    originalSens = -1;
+                }
             }
         } catch (Exception e) {
             LOGGER.debug("[MoidClient/Zoom] restore failed", e);
         }
-        originalSens = -1;
     }
 
     /**

@@ -28,5 +28,3 @@ src-backup-*.zip
 # OS
 .DS_Store
 Thumbs.db
-# local website preview (moidclient.com static site, plain html/css/js)
-/website/

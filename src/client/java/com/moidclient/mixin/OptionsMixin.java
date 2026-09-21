@@ -19,9 +19,4 @@ public abstract class OptionsMixin {
     private void moidclient$parkGammaForSave(CallbackInfo ci) {
         FullbrightManager.onSaveStart();
     }
-
-    @Inject(method = "save()V", at = @At("TAIL"))
-    private void moidclient$afterOptionsSave(CallbackInfo ci) {
-        FullbrightManager.onSaveEnd();
-    }
 }

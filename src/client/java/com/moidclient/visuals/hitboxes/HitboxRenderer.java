@@ -16,8 +16,13 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ambient.AmbientCreature;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.fish.WaterAnimal;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -58,7 +63,9 @@ public final class HitboxRenderer {
             ));
     }
 
-    private static int frameCounter = 0;
+    // long: an int counter overflows to negative after ~2B frames and would
+    // then skip rendering essentially forever (negative % skip != 0).
+    private static long frameCounter = 0;
     private static volatile long lastTickMs = 0;
 
     public static void register(ConfigManager config) {
@@ -111,17 +118,20 @@ public final class HitboxRenderer {
                         AABB shape = entity.getBoundingBox();
                         double w = shape.maxX - shape.minX + padding * 2;
                         double h = shape.maxY - shape.minY + padding * 2;
+                        double d = shape.maxZ - shape.minZ + padding * 2;
                         AABB box = new AABB(
-                                ix - w / 2, iy - padding, iz - w / 2,
-                                ix + w / 2, iy - padding + h, iz + w / 2);
+                                ix - w / 2, iy - padding, iz - d / 2,
+                                ix + w / 2, iy - padding + h, iz + d / 2);
                         drawBox(context, box, cam, rgb[0], rgb[1], rgb[2], alpha, width);
 
                         if (mod.hitboxEyeLine && entity instanceof LivingEntity living) {
-                            Vec3 eyeTick = living.getEyePosition();
+                            // Anchor on the interpolated body position: getEyePosition()
+                            // is tick-current, so adding the partial offset again
+                            // overshoots (and Y never got one - jitter).
+                            double ex = ix;
+                            double ey = iy + living.getEyeHeight();
+                            double ez = iz;
                             Vec3 look = living.getLookAngle();
-                            double ex = eyeTick.x + (ix - entity.getX());
-                            double ey = eyeTick.y + (iy - entity.getY());
-                            double ez = eyeTick.z + (iz - entity.getZ());
                             drawSegment(context,
                                     ex, ey, ez,
                                     ex + look.x * eyeLen, ey + look.y * eyeLen, ez + look.z * eyeLen,
@@ -147,7 +157,12 @@ public final class HitboxRenderer {
         if (entity instanceof Enemy) {
             return mod.hitboxHostiles ? mod.hitboxHostilesColor : null;
         }
-        if (entity instanceof Animal) {
+        if (entity instanceof Animal
+                || entity instanceof Villager
+                || entity instanceof IronGolem
+                || entity instanceof SnowGolem
+                || entity instanceof AmbientCreature
+                || entity instanceof WaterAnimal) {
             return mod.hitboxPassives ? mod.hitboxPassivesColor : null;
         }
         return mod.hitboxOther ? mod.hitboxOtherColor : null;
@@ -188,7 +203,7 @@ public final class HitboxRenderer {
             poseStack.pushPose();
             try {
                 poseStack.translate(ox, oy, oz);
-                context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(), (pose, consumer) ->
+                context.submitNodeCollector().submitCustomGeometry(poseStack, a >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent(), (pose, consumer) ->
                     boxEdges(pose, consumer, w, h, d, r, g, b, a, width)
                 );
             } finally {
@@ -218,7 +233,7 @@ public final class HitboxRenderer {
             poseStack.pushPose();
             try {
                 poseStack.translate(-cam.x, -cam.y, -cam.z);
-                context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(), (pose, consumer) ->
+                context.submitNodeCollector().submitCustomGeometry(poseStack, a >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent(), (pose, consumer) ->
                     edge(pose, consumer,
                             (float) x1, (float) y1, (float) z1,
                             (float) x2, (float) y2, (float) z2,

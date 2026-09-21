@@ -2,13 +2,12 @@ package com.moidclient.server;
 
 import com.moidclient.config.ConfigManager;
 import com.moidclient.network.NetworkPackets;
+import com.moidclient.stats.StatsRecorder;
 import io.javalin.Javalin;
 import io.javalin.http.staticfiles.Location;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.function.Supplier;
 
 /**
@@ -23,6 +22,9 @@ public class ServerManager {
     private final ConfigManager config;
     private final NetworkPackets network;
     private final Supplier<com.google.gson.JsonElement> moduleDefs;
+    private final StatsRecorder stats;
+    private volatile com.moidclient.update.UpdateManager updates;
+    private volatile Runnable restartHook;
     private Javalin app;
     private int activePort = -1;
 
@@ -31,13 +33,29 @@ public class ServerManager {
     }
 
     public ServerManager(ConfigManager config, NetworkPackets network, Supplier<com.google.gson.JsonElement> moduleDefs) {
+        this(config, network, moduleDefs, null);
+    }
+
+    public ServerManager(ConfigManager config, NetworkPackets network, Supplier<com.google.gson.JsonElement> moduleDefs,
+                         StatsRecorder stats) {
         this.config = config;
         this.network = network;
         this.moduleDefs = moduleDefs;
+        this.stats = stats;
     }
 
     public int getActivePort() {
         return activePort;
+    }
+
+    /** Wired once at startup; null until then (endpoints answer IDLE). */
+    public void setUpdateManager(com.moidclient.update.UpdateManager updates) {
+        this.updates = updates;
+    }
+
+    /** Client-side restart (launches the watcher, then stops the game). */
+    public void setRestartHook(Runnable restartHook) {
+        this.restartHook = restartHook;
     }
 
     public String getBaseUrl() {
@@ -102,15 +120,30 @@ public class ServerManager {
                       LOGGER.warn("[MoidClient] Failed to serialize module defs", e);
                   }
               }
-              ctx.status(503).result("[]");
+              ctx.status(503).contentType("application/json").result("[]");
           })
           .get("/api/port", ctx -> ctx.result(String.valueOf(port)))
           .get("/api/health", ctx -> ctx.json(java.util.Map.of("status", "ok", "port", port)))
+          .get("/api/stats", ctx -> {
+              try {
+                  com.google.gson.JsonObject history = stats != null ? stats.toJson() : null;
+                  ctx.contentType("application/json").result(history != null ? history.toString() : "{\"sessions\":[]}");
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"sessions\":[]}");
+              }
+          })
+          .post("/api/stats/clear", ctx -> {
+              try {
+                  if (stats != null) stats.clear();
+                  ctx.result("ok");
+              } catch (Exception e) {
+                  ctx.status(500).result("err");
+              }
+          })
           .post("/api/log", ctx -> {
               try {
                   String body = ctx.body();
-                  if (body.length() > 10000) body = body.substring(0, 10000) + "...(truncated)";
-                  // truncate to 2000 chars to avoid log spam
+                  // single truncate to 2000 chars to avoid log spam
                   String logBody = body.length() > 2000 ? body.substring(0, 2000) + "..." : body;
                   LOGGER.info("[MoidClient][Web] {}", logBody);
                   ctx.status(200).result("ok");
@@ -118,22 +151,75 @@ public class ServerManager {
                   LOGGER.warn("[MoidClient][Web] log failed", e);
                   ctx.status(500).result("err");
               }
+          })
+          .get("/api/update/status", ctx -> {
+              try {
+                  com.google.gson.JsonObject s = updates != null
+                          ? updates.statusJson() : idleUpdateJson();
+                  ctx.contentType("application/json").result(s.toString());
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"phase\":\"ERROR\",\"error\":\"status failed\"}");
+              }
+          })
+          .post("/api/update/check", ctx -> {
+              try {
+                  if (updates == null) { ctx.status(503).result("{\"phase\":\"ERROR\",\"error\":\"updater not ready\"}"); return; }
+                  updates.check();
+                  ctx.contentType("application/json").result(updates.statusJson().toString());
+              } catch (Exception e) {
+                  LOGGER.warn("[MoidClient] Update check endpoint failed", e);
+                  ctx.status(500).result("{\"phase\":\"ERROR\",\"error\":\"check failed\"}");
+              }
+          })
+          .post("/api/update/download", ctx -> {
+              try {
+                  if (updates == null) { ctx.status(503).result("{\"error\":\"updater not ready\"}"); return; }
+                  boolean started = updates.startDownload();
+                  ctx.contentType("application/json").result("{\"started\":" + started + "}");
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"started\":false}");
+              }
+          })
+          .post("/api/update/discard", ctx -> {
+              try {
+                  if (updates == null) { ctx.status(503).result("{\"error\":\"updater not ready\"}"); return; }
+                  updates.discardStaged();
+                  ctx.contentType("application/json").result(updates.statusJson().toString());
+              } catch (Exception e) {
+                  ctx.status(500).result("{\"error\":\"discard failed\"}");
+              }
+          })
+          .post("/api/update/restart", ctx -> {              try {
+                  if (updates == null || restartHook == null) {
+                      ctx.status(503).result("{\"error\":\"restart not available\"}");
+                      return;
+                  }
+                  updates.writeRestartScript();
+                  restartHook.run();
+                  ctx.contentType("application/json").result("{\"ok\":true}");
+              } catch (Exception e) {
+                  LOGGER.warn("[MoidClient] Update restart failed", e);
+                  String msg = e.getMessage() == null ? "restart failed" : e.getMessage().replace("\"", "'");
+                  ctx.status(500).result("{\"error\":\"" + msg + "\"}");
+              }
           });
     }
 
-    public void stop() {
-        if (app != null) {
-            app.stop();
-            LOGGER.info("[MoidClient] Server stopped");
-        }
+    private static com.google.gson.JsonObject idleUpdateJson() {
+        com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+        o.addProperty("phase", "IDLE");
+        return o;
     }
 
-    public static boolean isPortAvailable(int port) {
-        try (ServerSocket ss = new ServerSocket(port)) {
-            ss.setReuseAddress(true);
-            return true;
-        } catch (IOException e) {
-            return false;
+    public void stop() {
+        try {
+            if (app != null) app.stop();
+        } catch (Exception e) {
+            LOGGER.warn("[MoidClient] Server stop failed", e);
+        } finally {
+            app = null;
+            activePort = -1;
         }
+        LOGGER.info("[MoidClient] Server stopped");
     }
 }

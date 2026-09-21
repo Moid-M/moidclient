@@ -32,11 +32,12 @@ public final class FreeLookManager {
                 ));
     }
 
-    private static boolean active = false;
-    private static CameraType prevCamera = null;
-    private static float yaw = 0;
-    private static float pitch = 0;
-    private static float sensitivity = 1.0f;
+    // Tick thread writes, render thread (CameraMixin/EntityMixin) reads.
+    private static volatile boolean active = false;
+    private static volatile CameraType prevCamera = null;
+    private static volatile float yaw = 0;
+    private static volatile float pitch = 0;
+    private static volatile float sensitivity = 1.0f;
 
     // Current-screen accessor. 26.1 keeps a public field on Minecraft
     // (mc.screen); 26.2 moved it to Gui.screen(). Resolved once.
@@ -61,7 +62,9 @@ public final class FreeLookManager {
             boolean shouldBe = false;
             if (mc != null && mc.player != null && currentScreen(mc) == null) {
                 shouldBe = Keybinds.isTriggered(freeLookKey, toggleMode);
-                sensitivity = mod.freelookSensitivity <= 0 ? 1.0f : (float) mod.freelookSensitivity;
+                double s = mod.freelookSensitivity;
+                if (Double.isNaN(s) || s <= 0) s = 1.0;
+                sensitivity = (float) Math.max(0.25, Math.min(3.0, s));
             }
             if (shouldBe && !active) {
                 // engage: start from the current view direction (no jump) and
@@ -99,11 +102,11 @@ public final class FreeLookManager {
         } catch (Exception ignored) {}
     }
 
-    private static float savedYaw = 0;
-    private static float savedPitch = 0;
-    private static float savedOldYaw = 0;
-    private static float savedOldPitch = 0;
-    private static boolean swapped = false;
+    private static volatile float savedYaw = 0;
+    private static volatile float savedPitch = 0;
+    private static volatile float savedOldYaw = 0;
+    private static volatile float savedOldPitch = 0;
+    private static volatile boolean swapped = false;
 
     /**
      * Called at the head of Camera.update: lends the FreeLook angles to the

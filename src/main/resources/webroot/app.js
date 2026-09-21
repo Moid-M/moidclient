@@ -1,13 +1,6 @@
 ﻿// Moid Client - HUD Editor + inline pickers, center fix, drag fix, no X/Y in card
-const MOID_APP_VERSION='1.1.0-dev2';
+const MOID_APP_VERSION='1.4.0';
 console.log('[MoidClient] app.js '+MOID_APP_VERSION);
-const PRESETS = [
-  { name: 'Electric Violet', hex: '#8B5CF6' },
-  { name: 'Neon Mint', hex: '#10B981' },
-  { name: 'Cyber Cyan', hex: '#06B6D4' },
-  { name: 'Flame Crimson', hex: '#EF4444' },
-  { name: 'Sunset Amber', hex: '#F59E0B' },
-];
 // Generic icon library keyed by icon NAME (from each module's definition()).
 // No module ids here - iconFor() resolves via the served metadata.
 const ICONS = {
@@ -73,6 +66,7 @@ function defsNoticeHtml(){
 let ws=null, accent='#9F9F9F', config={accentColor:accent, modules:{}};
 let focusedId=null, hasInitialRendered=false, isDraggingSlider=false;
 let isDraggingHud=false;
+let editorDragId=null;
 let lastBgToggle=0;
 let searchQuery="";
 let windowSize={scaledWidth:640, scaledHeight:360, width:1920, height:1080, guiScale:3};
@@ -236,6 +230,9 @@ function samplePreview(id){
     case 'sessionTimer': return {text:'Session: 12:34', kind:'text'};
     case 'potionEffects': return {text:'Speed II 3:24\nRegeneration 0:42', kind:'effects'};
     case 'armorStatus': return {text:'No armor equipped', kind:'effects'};
+    case 'comboCounter': return {text:'Combo: 3', kind:'text'};
+    case 'reachDisplay': return {text:'Reach: 3.20', kind:'text'};
+    case 'memoryUsage': return {text:'Memory: 1024 MB', kind:'text'};
     default: return null;
   }
 }
@@ -253,11 +250,32 @@ function applyCanvasZoom(){
   const inp=document.querySelector('#canvasZoom');
   if(inp && document.activeElement!==inp) inp.value = canvasZoom;
 }
+// Editor geometry assumptions: pills are clamped so at least this many px stay
+// on-canvas (grabbable), and centering assumes this pill size (halved below).
+const EDITOR_EDGE_PAD=12;
+const EDITOR_CENTER_W=40, EDITOR_CENTER_H=20;
 function syncEditorItems(){
   try{
   applyCanvasZoom();
   const outer=document.querySelector('#hudPreviewOuter');
   if(!outer) return;
+  // While dragging, never rebuild pills (that destroys the node under the
+  // pointer and the drag stutters): just glide the dragged pill, live values.
+  if(isDraggingHud && editorDragId){
+    const dm=config.modules[editorDragId];
+    if(dm){
+      document.querySelectorAll(`.hud-preview-item[data-id="${editorDragId}"]`).forEach(el=>{
+        const box=el.closest('.hudPreviewOuter,#hudPreviewOuter')||outer;
+        const brect=box.getBoundingClientRect();
+        const bsx=brect.width/((windowSize&&windowSize.scaledWidth)||640);
+        const bsy=brect.height/((windowSize&&windowSize.scaledHeight)||360);
+        const sw=(windowSize&&windowSize.scaledWidth)||640, sh=(windowSize&&windowSize.scaledHeight)||360;
+        el.style.left=(Math.max(0,Math.min(dm.x,sw-EDITOR_EDGE_PAD))*bsx)+'px';
+        el.style.top=(Math.max(0,Math.min(dm.y,sh-EDITOR_EDGE_PAD))*bsy)+'px';
+      });
+    }
+    return;
+  }
   outer.querySelectorAll('.hud-preview-item,.hud-editor-hint').forEach(e=>e.remove());
   const enabledIds=MODULE_ORDER.filter(id=>{
     const m=config.modules[id]; const meta=MODULES_META[id]; return m && m.enabled && meta && meta.editor;
@@ -333,12 +351,19 @@ function syncEditorItems(){
     if(pv && pv.kind==='keystrokes' && mod.keystrokesOutline===false){
       el.style.borderColor='transparent';
     }
-    let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - 12));
-    let y=Math.max(0, Math.min(mod.y, windowSize.scaledHeight - 12));
+    let x=Math.max(0, Math.min(mod.x, windowSize.scaledWidth - EDITOR_EDGE_PAD));
+    let y=Math.max(0, Math.min(mod.y, windowSize.scaledHeight - EDITOR_EDGE_PAD));
     el.style.left=(x * sx)+'px';
     el.style.top=(y * sy)+'px';
     if(editorSelectedId===id){ el.style.outline='2px solid var(--accent)'; el.style.outlineOffset='1px'; el.style.zIndex='2'; }
     box.appendChild(el);
+    // Re-clamp with the pill's real size so large pills keep 12px grabbable.
+    try{
+      const apw=(el.offsetWidth/(sx||1))||0, aph=(el.offsetHeight/(sy||1))||0;
+      const cx=Math.max(EDITOR_EDGE_PAD-apw, Math.min(mod.x, windowSize.scaledWidth-EDITOR_EDGE_PAD));
+      const cy=Math.max(EDITOR_EDGE_PAD-aph, Math.min(mod.y, windowSize.scaledHeight-EDITOR_EDGE_PAD));
+      el.style.left=(cx*sx)+'px'; el.style.top=(cy*sy)+'px';
+    }catch(e){}
   });
   if(!idsToShow.length){
     const hint=document.createElement('div');
@@ -376,12 +401,16 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
   if(main && !outers.includes(main)) outers.unshift(main);
   if(!outers.length) return;
   for(const outer of outers){
+  // Idempotent: render() injects the All-tab canvas after boot, so this runs
+  // again — never double-bind listeners on an already-bound canvas.
+  if(outer.dataset.moidDragBound) continue;
+  outer.dataset.moidDragBound='1';
   let dragging=false, dragId=null, startX=0, startY=0, startModX=0, startModY=0, dragEl=null;
   let lastDragSend=0;
   outer.addEventListener('pointerdown', e=>{
     const item=e.target.closest('.hud-preview-item');
     if(!item) return;
-    dragId=item.dataset.id; dragEl=item; editorSelectedId=dragId;
+    dragId=item.dataset.id; dragEl=item; editorSelectedId=dragId; editorDragId=dragId;
     dragging=true; isDraggingHud=true; item.setPointerCapture(e.pointerId); item.style.cursor='grabbing';
     startX=e.clientX; startY=e.clientY;
     const mod0=config.modules[dragId];
@@ -412,8 +441,10 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     if(!mod) return;
     let nx=Math.round(startModX+dx);
     let ny=Math.round(startModY+dy);
-    nx=Math.max(0, Math.min((windowSize.scaledWidth||640)-12, nx));
-    ny=Math.max(0, Math.min((windowSize.scaledHeight||360)-12, ny));
+    // Keep at least EDITOR_EDGE_PAD px grabbable using the pill's own size.
+    const pw=(dragEl.offsetWidth/(sx||1))||0, ph=(dragEl.offsetHeight/(sy||1))||0;
+    nx=Math.max(EDITOR_EDGE_PAD-pw, Math.min((windowSize.scaledWidth||640)-EDITOR_EDGE_PAD, nx));
+    ny=Math.max(EDITOR_EDGE_PAD-ph, Math.min((windowSize.scaledHeight||360)-EDITOR_EDGE_PAD, ny));
     mod.x=nx; mod.y=ny;
     dragEl.style.left=(nx*sx)+'px';
     dragEl.style.top=(ny*sy)+'px';
@@ -421,9 +452,11 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     const ey=document.querySelector('#editorY'); if(ey && document.activeElement!==ey) ey.value=ny;
     const posEl=document.querySelector('#editorPos'); if(posEl) posEl.textContent=`${nx}, ${ny} - ${(mod.scale||1).toFixed(2)}x`;
     const now=Date.now();
-    if(now-lastDragSend>120){
+    // Drag previews skip disk + broadcast (release saves and converges);
+    // ~60Hz keeps the in-game HUD gliding instead of stepping.
+    if(now-lastDragSend>16){
       lastDragSend=now;
-      send({type:'UPDATE_MODULE', id:dragId, data:{x:nx, y:ny}});
+      send({type:'PREVIEW_MODULE', id:dragId, data:{x:nx, y:ny}});
     }
     e.preventDefault();
   });
@@ -433,7 +466,7 @@ function setupEditorDrag(){  const outers=[...document.querySelectorAll('.hudPre
     if(dragEl) dragEl.style.cursor='grab';
     const doneId=dragId;
     const mod=doneId ? config.modules[doneId] : null;
-    dragEl=null; dragId=null;
+    dragEl=null; dragId=null; editorDragId=null;
     if(doneId && mod) send({type:'UPDATE_MODULE', id:doneId, data:{x:mod.x, y:mod.y}});
     syncEditorItems();
   }
@@ -581,28 +614,19 @@ function setAccent(hex){
   $$('input[type="range"]').forEach(updateSliderFill);
 }
 function isLight(hex){
-  const c=hex.replace('#',''); const r=parseInt(c.substring(0,2),16), g=parseInt(c.substring(2,4),16), b=parseInt(c.substring(4,6),16);
+  let c=String(hex||'').trim(); if(c[0]==='#') c=c.slice(1);
+  if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+  if(c.length!==6) return false;
+  const r=parseInt(c.substring(0,2),16), g=parseInt(c.substring(2,4),16), b=parseInt(c.substring(4,6),16);
+  if(Number.isNaN(r+g+b)) return false;
   const l=(0.299*r+0.587*g+0.114*b)/255; return l>0.6;
-}
-function renderPresets(containerId,onPick){
-  const c=document.getElementById(containerId); if(!c) return; c.innerHTML='';
-  PRESETS.forEach(p=>{
-    const b=document.createElement('button');
-    b.className='w-full h-14 rounded-xl border flex flex-col items-center justify-center gap-1 text-[11px] font-medium';
-    b.style.cssText=`background:var(--bg);border-color:var(--border);transition: border-color 220ms, transform 220ms cubic-bezier(0.34,1.56,0.64,1)`;
-    b.innerHTML=`<span class="w-6 h-6 rounded-full" style="background:${p.hex};box-shadow:0 0 10px ${p.hex}55"></span>${p.name}`;
-    b.onclick=()=>onPick(p.hex);
-    b.onmouseenter=()=>{b.style.borderColor=p.hex; b.style.transform='translateY(-1px) scale(1.02)'};
-    b.onmouseleave=()=>{b.style.borderColor='var(--border)'; b.style.transform='none'};
-    c.appendChild(b);
-  });
 }
 function updateSliderFill(el){
   const min=parseFloat(el.min), max=parseFloat(el.max), val=parseFloat(el.value);
   const pct=((val-min)/(max-min))*100;
   el.style.background=`linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border) ${pct}%, var(--border) 100%)`;
 }
-function escAttr(s){ return String(s ?? '').replace(/"/g, '&quot;'); }
+function escAttr(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const PICKER_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.66 5.66a8 8 0 1 1-11.31 0z"/><circle cx="12" cy="12" r="2.2"/></svg>`;
 function pickerPanelHtml(ck, withAlpha){
   return `<div class="picker-wrap" data-color-picker="${ck}">
@@ -620,7 +644,7 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
       <div class="flex gap-2 items-center">
         <div class="w-6 h-6 rounded-full border shrink-0" style="background:${dotBg};border-color:var(--border); ${checker}" data-color-preview="${ck}"></div>
         <input data-field="${key}" data-id="${id}" value="${escAttr(cur)}" placeholder="${escAttr(placeholder || '#RRGGBB')}" spellcheck="false" class="field-input flex-1 px-2.5 py-1.5 rounded-full border text-xs font-mono" style="background:var(--bg);border-color:var(--border)"/>
-        ${nullable ? `<button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=${key}]').value=''; this.closest('[data-id]').querySelector('[data-field=${key}]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>` : ''}
+        ${nullable ? `<button class="text-xs px-2 py-1 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)" onclick="this.closest('[data-id]').querySelector('[data-field=&quot;${key}&quot;]').value=''; this.closest('[data-id]').querySelector('[data-field=&quot;${key}&quot;]').dispatchEvent(new Event('change',{bubbles:true}))">Clear</button>` : ''}
         <button class="picker-icon-btn" data-color-picker-toggle="${ck}" title="Color picker">${PICKER_ICON_SVG}</button>
       </div>
       ${pickerPanelHtml(ck, withAlpha)}
@@ -628,7 +652,7 @@ function colorOptionHtml(id, key, label, hint, cur, placeholder, nullable, withA
 }
 // GLFW key codes <-> display names for the "keybind" option type.
 // Values are polled in-game via GLFW directly, so any keyboard key works.
-const GLFW_KEY_NAMES = {0:'Mouse Left',1:'Mouse Right',2:'Mouse Middle',32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
+const GLFW_KEY_NAMES = {0:'Mouse Left',1:'Mouse Right',2:'Mouse Middle',32:'Space',256:'Escape',257:'Enter',258:'Tab',259:'Backspace',260:'Insert',261:'Delete',262:'Right',263:'Left',264:'Down',265:'Up',266:'Page Up',267:'Page Down',268:'Home',269:'End',280:'Caps Lock',39:"'",290:'F1',291:'F2',292:'F3',293:'F4',294:'F5',295:'F6',296:'F7',297:'F8',298:'F9',299:'F10',300:'F11',301:'F12',340:'Left Shift',341:'Left Ctrl',342:'Left Alt',343:'Left Super',344:'Right Shift',345:'Right Ctrl',346:'Right Alt',347:'Right Super',44:',',45:'-',46:'.',47:'/',59:';',61:'=',91:'[',92:'\\',93:']',96:'`'};
 for(let c=48;c<=57;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
 for(let c=65;c<=90;c++) GLFW_KEY_NAMES[c]=String.fromCharCode(c);
 function keyName(code){ return GLFW_KEY_NAMES[code] || ('Key ' + code); }
@@ -637,6 +661,12 @@ const CODE_FROM_KEYBOARD = {'Space':32,'Enter':257,'NumpadEnter':257,'Tab':258,'
 for(let c=48;c<=57;c++) CODE_FROM_KEYBOARD['Digit'+String.fromCharCode(c)]=c;
 for(let c=65;c<=90;c++) CODE_FROM_KEYBOARD['Key'+String.fromCharCode(c)]=c;
 for(let f=1;f<=12;f++) CODE_FROM_KEYBOARD['F'+f]=289+f;
+function hudEnabledCount(){
+  try{
+    const mods=config.modules||{};
+    return Object.keys(mods).filter(id=>mods[id]&&mods[id].enabled&&(!MODULES_META[id]||MODULES_META[id].cat==='hud')).length;
+  }catch(e){ return 0; }
+}
 function updateKeybindTab(){
   const z=document.querySelector('#kbZoomKey'), f=document.querySelector('#kbFreelookKey');
   if(z) z.textContent=keyName(config.modules?.zoom?.zoomKey ?? 67);
@@ -726,8 +756,8 @@ function cardTemplate(id,meta,data,animate){
       <div class="flex gap-3 flex-1 min-w-0">
         <div class="icon-box w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background:var(--bg);border:1px solid var(--border)">${icon}</div>
         <div class="min-w-0">
-          <div class="card-title font-medium text-[13.5px] leading-none truncate" style="color:var(--text-bright);transition: color 180ms">${meta.name}</div>
-          <div class="text-xs mt-1 leading-snug" style="color:var(--text-muted)">${meta.desc}</div>
+          <div class="card-title font-medium text-[13.5px] leading-none truncate" style="color:var(--text-bright);transition: color 180ms">${escAttr(meta.name)}</div>
+          <div class="text-xs mt-1 leading-snug" style="color:var(--text-muted)">${escAttr(meta.desc)}</div>
         </div>
       </div>
       <div class="toggle ${enabled?'active':''}" data-toggle="${id}" title="Toggle"><div class="toggle-dot"></div></div>
@@ -735,7 +765,7 @@ function cardTemplate(id,meta,data,animate){
     <div class="drawer ${isFocused?'open':''}" data-drawer="${id}">
       <div class="space-y-4 pt-2">
         <div class="focus-bar" style="${isFocused?'':'display:none'}">
-          <span class="text-xs font-medium" style="color:var(--text-muted)">Configuring <span style="color:var(--text-bright)">${meta.name}</span></span>
+          <span class="text-xs font-medium" style="color:var(--text-muted)">Configuring <span style="color:var(--text-bright)">${escAttr(meta.name)}</span></span>
           <button class="text-xs px-2.5 py-1 rounded-full border font-medium" style="border-color:var(--border);background:var(--card);color:var(--text-muted)" data-back="${id}">← Back</button>
         </div>
         ${overlay?`<div class="text-[11px] px-3 py-2 rounded-full border flex items-center gap-2" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">Position edited in <button class="underline" style="color:var(--accent)" onclick="document.querySelector('[data-tab=editor]').click()">HUD Editor</button> • <span style="font-family:'JetBrains Mono',monospace; color:var(--text-bright)">${data.x}, ${data.y}</span></div>`:''}
@@ -770,17 +800,23 @@ function render(animate=false){
   }
   const gridsByCat={hud:hudGrid, visuals:visualsGrid, utility:utilitiesGrid};
   const allIds=MODULE_ORDER;
+  // Custom categories (e.g. future plugin sections) have no dedicated tab:
+  // their cards fall back to the HUD grid, and the All tab groups them by
+  // name automatically. Track the focused card's real grid so focus mode
+  // below never hides it.
+  let focusGrid=null;
   for(const id of allIds){
     if(focusedId && focusedId!==id) continue;
     const meta=MODULES_META[id];
     const data=(config.modules&&config.modules[id])||{enabled:false,x:10,y:10,scale:1,opacity:1};
     const html=cardTemplate(id,meta,data,shouldAnimate);
     const target=gridsByCat[meta.cat]||hudGrid;
+    if(id===focusedId) focusGrid=target;
     target.insertAdjacentHTML('beforeend',html);
   }
   // all tab - grouped into foldable category sections, filtered by search
   const CAT_NAMES = {hud:'HUD Overlays', visuals:'Visuals', utility:'Utility'};
-  function catName(cat){ return CAT_NAMES[cat] || (cat.charAt(0).toUpperCase()+cat.slice(1)); }
+  function catName(cat){ return CAT_NAMES[cat] || escAttr(cat.charAt(0).toUpperCase()+cat.slice(1)); }
   if(allGrid){
     const allIdsAll = MODULE_ORDER.filter(id=>{
       if(!searchQuery) return true;
@@ -841,17 +877,18 @@ function render(animate=false){
         try{ localStorage.setItem('cc_cat_'+cat, willOpen?'0':'1'); }catch(e){}
       };
     });
+    // The All-tab mini editor is injected above after boot bindings ran.
+    setupEditorDrag();
     const allCountEl=document.querySelector('#allCount'); if(allCountEl) allCountEl.textContent=allIdsAll.length;
     const noRes=document.querySelector('#noResults'); if(noRes) noRes.classList.toggle('hidden', allIdsAll.length>0);
   }
   if(focusedId){
-    const cat=MODULES_META[focusedId].cat;
-    for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display=(k===cat)?'':'none';
+    for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display=(gridsByCat[k]===focusGrid)?'':'none';
   } else {
     for(const k of Object.keys(gridsByCat)) gridsByCat[k].parentElement.style.display='';
   }
   const hudCountEl=document.querySelector('#hudCount');
-  if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
+  if(hudCountEl) hudCountEl.textContent=hudEnabledCount();
   $$('input[type="range"]').forEach(updateSliderFill);
   $$('[data-toggle]').forEach(el=>{
     el.onclick=(e)=>{
@@ -863,7 +900,7 @@ function render(animate=false){
       el.classList.toggle('active',next);
       const card=el.closest('.card');
       if(card){ card.style.transform='scale(1.015)'; setTimeout(()=>card.style.transform='',160); }
-      if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
+      if(hudCountEl) hudCountEl.textContent=hudEnabledCount();
       send({type:'UPDATE_MODULE',id,data:{enabled:next}});
     };
   });
@@ -879,8 +916,14 @@ function render(animate=false){
       e.stopPropagation();
       const id=b.getAttribute('data-reset');
       const cur=config.modules[id]||{};
+      const meta=MODULES_META[id];
       const patch={};
-      for(const k of ['x','y','scale','opacity']) if(k in cur) patch[k]={x:10,y:10,scale:1,opacity:1}[k];
+      // Geometry always resets even when never positioned before.
+      for(const k of ['x','y','scale','opacity']) patch[k]={x:10,y:10,scale:1,opacity:1}[k];
+      // Plus every declared option default (geometry keys have none, covered above).
+      if(meta&&meta.options) for(const o of meta.options){
+        if(o&&o.default!==undefined&&o.default!==null) patch[o.key]=o.default;
+      }
       if(!Object.keys(patch).length) return;
       send({type:'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]={...cur, ...patch};
@@ -1010,7 +1053,7 @@ function render(animate=false){
   });
   $$('input[data-field]').forEach(inp=>{
     const isRange = inp.type==='range';
-    const handler=()=>{
+    const handler=(preview)=>{
       const id=inp.getAttribute('data-id'); const field=inp.getAttribute('data-field');
       let val;
       if(inp.type==='checkbox') val=inp.checked;
@@ -1018,7 +1061,9 @@ function render(animate=false){
       else if(field==='shadow' || field==='background') val=inp.checked;
       else if(inp.type==='range') val=parseFloat(inp.value);
       else val=inp.value;
-      const patch={}; patch[field]=val; send({type:'UPDATE_MODULE',id,data:patch});
+      // Sliders drag at 60Hz: previews stay memory-only (no save/broadcast
+      // storm, no flood-guard drops); the release sends the saving update.
+      const patch={}; patch[field]=val; send({type:preview?'PREVIEW_MODULE':'UPDATE_MODULE',id,data:patch});
       const m=config.modules[id]=config.modules[id]||{x:10,y:10,scale:1,opacity:1,enabled:false}; m[field]=val;
       const card=inp.closest('.card');
       if(card){
@@ -1034,10 +1079,10 @@ function render(animate=false){
     };
     if(isRange){
       inp.addEventListener('pointerdown',()=> isDraggingSlider=true);
-      inp.addEventListener('pointerup',()=> { isDraggingSlider=false; handler(); });
+      inp.addEventListener('pointerup',()=> { isDraggingSlider=false; handler(false); });
       inp.addEventListener('input', ()=>{
         isDraggingSlider=true;
-        handler();
+        handler(true);
         updateSliderFill(inp);
         const id=inp.getAttribute('data-id'); const field=inp.getAttribute('data-field');
         const card=inp.closest('.card');
@@ -1046,7 +1091,7 @@ function render(animate=false){
           if(lbl) lbl.textContent = field==='scale' ? parseFloat(inp.value).toFixed(2)+'x' : parseFloat(inp.value).toFixed(2);
         }
       });
-      inp.addEventListener('change', handler);
+      inp.addEventListener('change', ()=>handler(false));
     } else if(inp.type==='checkbox'){
       inp.addEventListener('change', handler);
     } else {
@@ -1067,7 +1112,7 @@ function render(animate=false){
 function patchFromSync(newData){
   config=newData; if(!config.modules) config.modules={};
   const hudCountEl=document.querySelector('#hudCount');
-  if(hudCountEl) hudCountEl.textContent=Object.values(config.modules).filter(m=>m.enabled).length;
+  if(hudCountEl) hudCountEl.textContent=hudEnabledCount();
   const allCountEl=document.querySelector('#allCount');
   if(allCountEl){
     const filtered = MODULE_ORDER.filter(id=>{
@@ -1090,6 +1135,8 @@ function patchFromSync(newData){
       if(document.activeElement===inp) return;
       if(isDraggingSlider && inp.type==='range' && inp.matches(':active')) return;
       const f=inp.getAttribute('data-field');
+      // While dragging, the drag handler owns x/y inputs (server state lags).
+      if(isDraggingHud && (f==='x'||f==='y')) return;
       if(f==='x') inp.value=data.x;
       else if(f==='y') inp.value=data.y;
       else if(inp.type==='range'){ if(data[f]!==undefined && data[f]!==null){ inp.value=data[f]; updateSliderFill(inp); } }
@@ -1181,12 +1228,19 @@ function setConnection(state){
     showBanner(wsAttempts<=1 ? 'Connecting to Minecraft…' : 'Reconnecting to Minecraft…');
   }
 }
-function send(obj){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(obj)); }
+function send(obj){
+  const msg=JSON.stringify(obj);
+  if(ws&&ws.readyState===1){ ws.send(msg); return; }
+  // Offline: queue (cap 50, drop oldest) instead of silently losing the edit.
+  pendingOut.push(msg);
+  if(pendingOut.length>50) pendingOut.shift();
+}
+let pendingOut=[];
 function handleSync(data){
   if(data.accentColor) setAccent(data.accentColor);
   if(data.themeTextColor) setThemeText(data.themeTextColor);
   if(!config.modules) config.modules={};
-  if(!hasInitialRendered){ config=data; render(true); setTimeout(syncEditorItem, 80); return; }
+  if(!hasInitialRendered){ config=data; render(true); updateKeybindTab(); setTimeout(syncEditorItem, 80); return; }
   if(isDraggingSlider || isDraggingHud){ config=data; patchFromSync(data); return; }
   patchFromSync(data);
   setTimeout(syncEditorItem, 20);
@@ -1203,18 +1257,320 @@ function connect(){
   wsAttempts++;
   try{ if(ws && ws.readyState!==3) ws.close(); }catch(e){}
   const sock=ws=new WebSocket(url);
-  sock.onopen=()=>{ if(ws!==sock) return; setConnection(true); };
+  sock.onopen=()=>{ if(ws!==sock) return; setConnection(true); const q=pendingOut; pendingOut=[]; for(const m of q){ try{ if(ws===sock&&ws.readyState===1) ws.send(m); }catch(e){} } };
   sock.onclose=()=>{ if(ws!==sock) return; setConnection(false); if(reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer=setTimeout(connect,2000); };
   sock.onerror=()=>{ if(ws!==sock) return; setConnection(false); };
   sock.onmessage=ev=>{
-    try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); if(msg.type==='LIVE_STATS') handleLiveStats(msg.data); }catch(e){ console.error(e); }
+    try{ const msg=JSON.parse(ev.data); if(msg.type==='SYNC_CONFIG') handleSync(msg.data); if(msg.type==='WINDOW_SIZE') handleWindowSize(msg.data); if(msg.type==='EXPORT_CONFIG') downloadJson(msg.data,'moid-client.json'); if(msg.type==='LIVE_STATS') handleLiveStats(msg.data); if(msg.type==='UPDATE_STATUS') renderUpdateStatus(msg.data); }catch(e){ console.error(e); }
   };
 }
+// ---- Statistics tab: local performance history charts ----
+let statsCache=null, statsSessionId='live';
+function statsSessionList(){
+  try{ return (statsCache&&statsCache.sessions)||[]; }catch(e){ return []; }
+}
+function statsCurrentSessionId(){
+  try{
+    const arr=statsSessionList();
+    for(let i=arr.length-1;i>=0;i--){ if(!arr[i].endedAt) return arr[i].id; }
+    if(arr.length) return arr[arr.length-1].id;
+  }catch(e){}
+  return null;
+}
+async function loadStats(){
+  try{
+    const r=await fetch('/api/stats');
+    if(!r.ok) return;
+    statsCache=await r.json();
+  }catch(e){ return; }
+  try{
+    const sel=document.querySelector('#statsSession');
+    const sessions=statsSessionList();
+    if(sel){
+      const cur=sel.value;
+      sel.innerHTML='';
+      const optLive=document.createElement('option');
+      optLive.value='live'; optLive.textContent='Live session';
+      sel.appendChild(optLive);
+      for(const s of sessions.slice().reverse()){
+        const o=document.createElement('option');
+        o.value=s.id;
+        const d=new Date(s.startedAt);
+        const dur=s.endedAt?Math.max(0,Math.round((s.endedAt-s.startedAt)/1000)):null;
+        o.textContent=d.toLocaleString()+(dur!=null?(' · '+Math.floor(dur/60)+':'+String(dur%60).padStart(2,'0')):' · live');
+        sel.appendChild(o);
+      }
+      if(cur==='live'||!cur) sel.value='live';
+      else if(sessions.some(s=>s.id===cur)) sel.value=cur;
+      else sel.value='live';
+      statsSessionId=sel.value;
+    }
+    renderStats();
+  }catch(e){ console.error(e); }
+}
+function statsActiveSession(){
+  try{
+    const sessions=statsSessionList(); if(!sessions.length) return null;
+    if(statsSessionId&&statsSessionId!=='live'){
+      const found=sessions.find(s=>s.id===statsSessionId);
+      if(found) return found;
+    }
+    const live=statsCurrentSessionId();
+    if(live){ const f=sessions.find(s=>s.id===live); if(f) return f; }
+    return sessions[sessions.length-1];
+  }catch(e){ return null; }
+}
+function fmtTime(t){ try{ return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }catch(e){ return ''; } }
+let statsWindowSec=(()=>{ const v=parseInt(localStorage.getItem('cc_statsWindow')||'300'); return Number.isNaN(v)?300:v; })();
+function renderStats(){
+  const s=statsActiveSession();
+  const allSamples=(s&&s.samples)||[];
+  const allEvents=(s&&s.events)||[];
+  // Display window: trailing slice so long sessions don't cram.
+  let samples=allSamples, events=allEvents;
+  if(statsWindowSec>0 && allSamples.length){
+    const endT=s.endedAt?s.endedAt:Date.now();
+    const fromT=endT-statsWindowSec*1000;
+    samples=allSamples.filter(p=>p.t>=fromT);
+    events=allEvents.filter(e=>e.t>=fromT);
+  }
+  drawStatChart('statFps', 'statFpsVal', 'FPS', samples, p=>p.fps, v=>String(Math.round(v)), '#22C55E', events);
+  drawStatChart('statPing', 'statPingVal', 'Ping', samples, p=>p.ping, v=>Math.round(v)+' ms', '#38BDF8', events);
+  drawStatChart('statTps', 'statTpsVal', 'TPS', samples, p=>p.tps, v=>(Math.round(v*10)/10).toFixed(1), '#EAB308', events);
+  drawStatChart('statMem', 'statMemVal', 'Memory', samples, p=>p.mem, v=>Math.round(v)+' MB', '#A78BFA', events);
+  const info=document.querySelector('#statsInfo');
+  if(info){
+    if(!s){ info.textContent='No data yet — play a little, then reopen this tab.'; }
+    else{
+      const n=samples.length;
+      const ev=events.length;
+      const win=statsWindowSec>0?(' · last '+statsWindowLabel()):' · full session';
+      info.textContent=ev+' events · '+n+' samples'+(!s.endedAt?' · live':'')+win;
+    }
+  }
+  try{
+    const se=document.querySelector('#statsEnabled');
+    if(se && document.activeElement!==se){
+      const m=config.modules&&config.modules.statistics;
+      se.checked=m?!!m.enabled:true;
+    }
+    const sw=document.querySelector('#statsWindow');
+    if(sw && document.activeElement!==sw) sw.value=String(statsWindowSec);
+  }catch(e){}
+}
+function statsWindowLabel(){
+  if(statsWindowSec>=3600) return 'hour';
+  if(statsWindowSec>=60) return Math.round(statsWindowSec/60)+' min';
+  return statsWindowSec+'s';
+}
+function drawStatChart(id, valId, label, samples, get, fmt, color, events){
+  const cv=document.getElementById(id); if(!cv) return;
+  const valEl=valId?document.getElementById(valId):null;
+  const parent=cv.parentElement; const w=((parent&&parent.clientWidth)||600), h=110;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.max(1,Math.round(w*dpr)); cv.height=Math.round(h*dpr);
+  cv.style.width=w+'px'; cv.style.height=h+'px';
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  const padL=46, padR=8, padT=8, padB=16;
+  const iw=Math.max(10,w-padL-padR), ih=Math.max(10,h-padT-padB);
+  ctx.font='10px JetBrains Mono, monospace';
+  if(!samples.length){
+    ctx.fillStyle='#94A3B8'; ctx.fillText('waiting for samples…', padL, padT+12);
+    if(valEl) valEl.textContent='—';
+    cv._stats=null; return;
+  }
+  const vals=samples.map(s=>{ const v=get(s); return (typeof v==='number'&&isFinite(v))?v:0; });
+  let mn=Math.min.apply(null, vals), mx=Math.max.apply(null, vals);
+  if(!(mx>mn)){ mx=mn+1; }
+  const spanPad=(mx-mn)*0.15; mn-=spanPad; mx+=spanPad;
+  const t0=samples[0].t, t1=samples[samples.length-1].t, span=Math.max(1,t1-t0);
+  const X=t=>padL+((t-t0)/span)*iw;
+  const Y=v=>padT+ih-((v-mn)/(mx-mn))*ih;
+  ctx.lineWidth=1;
+  [mn,(mn+mx)/2,mx].forEach(g=>{
+    const y=Math.round(Y(g))+0.5;
+    ctx.strokeStyle='rgba(148,163,184,0.18)';
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle='#94A3B8'; ctx.fillText(fmt(g), 2, y+3);
+  });
+  if(events) for(const ev of events){
+    if(!ev||ev.t<t0||ev.t>t1) continue;
+    const x=Math.round(X(ev.t))+0.5;
+    ctx.strokeStyle=ev.type==='join'?'rgba(16,185,129,0.55)':'rgba(239,68,68,0.55)';
+    ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+ih); ctx.stroke();
+  }
+  const grad=ctx.createLinearGradient(0,padT,0,padT+ih);
+  grad.addColorStop(0,color+'55'); grad.addColorStop(1,color+'00');
+  ctx.beginPath();
+  samples.forEach((s,i)=>{ const x=X(s.t), y=Y(vals[i]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.lineTo(X(t1),padT+ih); ctx.lineTo(X(t0),padT+ih); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.fillStyle='#94A3B8';
+  ctx.fillText(fmtTime(t0), padL, h-3);
+  const te=fmtTime(t1); ctx.fillText(te, w-padR-ctx.measureText(te).width, h-3);
+  if(valEl) valEl.textContent=fmt(vals[vals.length-1]);
+  cv._stats={samples,vals,t0,t1,mn,mx,fmt,events:events||[],label:label||id};
+  setupStatsHover(id);
+}
+function setupStatsHover(id){
+  const cv=document.getElementById(id); if(!cv||cv.dataset.hoverBound) return;
+  cv.dataset.hoverBound='1';
+  const tip=document.getElementById('statsTip');
+  cv.addEventListener('mousemove', e=>{
+    const g=cv._stats, tp=tip;
+    if(!g||!g.samples.length||!tp) return;
+    const r=cv.getBoundingClientRect();
+    const padL=46, padR=8, padT=8, padB=16;
+    const iw=Math.max(1,r.width-padL-padR), ih=Math.max(1,r.height-padT-padB);
+    const frac=Math.max(0,Math.min(1,(e.clientX-r.left-padL)/iw));
+    const t=g.t0+frac*(g.t1-g.t0);
+    let bi=0, bd=Infinity;
+    for(let i=0;i<g.samples.length;i++){ const d=Math.abs(g.samples[i].t-t); if(d<bd){ bd=d; bi=i; } }
+    const s=g.samples[bi], v=g.vals[bi];
+    const y=padT+ih-((v-g.mn)/Math.max(1e-9,(g.mx-g.mn)))*ih;
+    const x=padL+frac*iw;
+    tp.style.display='block';
+    tp.style.left=Math.min(Math.max(0,r.width-180),Math.max(4,x+12))+'px';
+    tp.style.top=Math.max(4,y-12)+'px';
+    let evTxt='';
+    for(const ev of g.events){
+      if(Math.abs(ev.t-s.t)<2000){ evTxt='<div style="opacity:0.75">'+escAttr(ev.type)+' · '+escAttr(ev.where||'')+'</div>'; break; }
+    }
+    tp.innerHTML='<div style="opacity:0.6;font-size:11px">'+(g.label||'')+'</div><div style="font-size:15px;font-weight:600">'+g.fmt(v)+'</div><div style="opacity:0.75">'+fmtTime(s.t)+'</div>'+evTxt;
+  });
+  cv.addEventListener('mouseleave', ()=>{ if(tip) tip.style.display='none'; });
+}
+setInterval(()=>{ try{ const p=document.querySelector('#tab-stats'); if(p&&!p.classList.contains('hidden')) loadStats(); }catch(e){} }, 5000);
+document.addEventListener('change', e=>{
+  if(e.target && e.target.id==='statsSession'){ statsSessionId=e.target.value; try{ renderStats(); }catch(err){} }
+  if(e.target && e.target.id==='statsWindow'){ statsWindowSec=parseInt(e.target.value)||0; try{ localStorage.setItem('cc_statsWindow', String(statsWindowSec)); }catch(err){} try{ renderStats(); }catch(err){} }
+  if(e.target && e.target.id==='statsEnabled'){
+    const next=e.target.checked;
+    const m=config.modules.statistics=config.modules.statistics||{enabled:true};
+    m.enabled=next;
+    send({type:'UPDATE_MODULE', id:'statistics', data:{enabled:next}});
+  }
+});
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id==='statsDelete'){
+    if(!confirm('Delete all recorded statistics?')) return;
+    fetch('/api/stats/clear', {method:'POST'}).then(()=>loadStats()).catch(()=>{});
+  }
+});
 function retryNow(){
   if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
   connect();
 }
+// ---- Updates tab: GitHub release check + staged self-update ----
+let updState=null;
+function fmtMB(b){ if(!b||b<=0) return '—'; return (b/1048576).toFixed(1)+' MB'; }
+function updBusy(){ return !!updState && (updState.phase==='CHECKING'||updState.phase==='DOWNLOADING'||updState.phase==='VERIFYING'); }
+function setUpdMsg(t){ const m=$('#updMsg'); if(m) m.textContent=t; }
+async function refreshUpdateStatus(){
+  try{
+    const r=await fetch('/api/update/status');
+    if(!r.ok) return;
+    renderUpdateStatus(await r.json());
+  }catch(e){}
+}
+async function updCheck(){
+  if(updBusy()) return;
+  setUpdMsg('Checking GitHub releases…');
+  try{
+    const r=await fetch('/api/update/check',{method:'POST'});
+    if(!r.ok) throw new Error('http '+r.status);
+    renderUpdateStatus(await r.json());
+  }catch(e){ setUpdMsg('Check failed — offline? Nothing was changed.'); }
+}
+async function updDownload(){
+  try{
+    const r=await fetch('/api/update/download',{method:'POST'});
+    const j=await r.json();
+    if(!j.started) setUpdMsg('Download did not start — check again first.');
+  }catch(e){ setUpdMsg('Download failed to start.'); }
+}
+async function updDiscard(){
+  try{
+    const r=await fetch('/api/update/discard',{method:'POST'});
+    renderUpdateStatus(await r.json());
+  }catch(e){}
+}
+async function updRestart(){
+  const v=updState&&updState.latest ? 'v'+updState.latest : 'the update';
+  if(!confirm('Restart Minecraft now to apply '+v+'? The game will close and the new jar swaps in before you relaunch.')) return;
+  setUpdMsg('Restarting to apply the update… you can close this tab.');
+  try{ await fetch('/api/update/restart',{method:'POST'}); }catch(e){}
+}
+function updManualHtml(s){
+  const staged=escAttr(s.stagedFile||'');
+  const old=escAttr(s.oldFile||'the old Moid-Client jar');
+  return `<div class="font-medium mb-1" style="color:var(--text-bright)">Apply whenever you like</div>`
+    + `<div><span style="color:var(--accent)">✓</span> <span class="font-mono">${staged}</span> downloaded &amp; SHA-256 verified.</div>`
+    + `<ol class="list-decimal ml-4 mt-1 space-y-0.5"><li>Close Minecraft.</li><li>Delete <span class="font-mono">${old}</span> from your <span class="font-mono">mods</span> folder.</li><li>Move <span class="font-mono">${staged}</span> from <span class="font-mono">moidclient-update</span> into <span class="font-mono">mods</span>.</li><li>Launch Minecraft.</li></ol>`;
+}
+function renderUpdateStatus(s){
+  if(!s) return;
+  updState=s;
+  const cur=$('#updCurrent'); if(cur) cur.textContent='v'+(s.current||'?');
+  const lw=$('#updLatestWrap'); if(lw) lw.classList.toggle('hidden', !s.latest);
+  const lt=$('#updLatest'); if(lt && s.latest) lt.textContent='v'+s.latest;
+  const dot=$('#updDot'); if(dot) dot.classList.toggle('hidden', !(s.updateAvailable||s.phase==='READY'));
+  const res=$('#updResult');
+  if(res){
+    if(s.lastResult){
+      const ok=s.lastResult.ok;
+      res.classList.remove('hidden');
+      res.style.borderColor=ok?'var(--accent)':'#EF4444';
+      res.innerHTML=ok
+        ? `<span style="color:var(--accent)">✓</span> Update applied: <span class="font-mono">${escAttr(s.lastResult.version||'')}</span> — you're running it now.`
+        : `<span style="color:#EF4444">⚠</span> Last update failed: ${escAttr(s.lastResult.error||'unknown error')} — nothing was changed, try again.`;
+    } else { res.classList.add('hidden'); res.innerHTML=''; }
+  }
+  const pw=$('#updProgressWrap'), act=$('#updActions'), man=$('#updManual');
+  const showProg=(s.phase==='DOWNLOADING'||s.phase==='VERIFYING');
+  if(pw) pw.classList.toggle('hidden', !showProg);
+  if(showProg){
+    const pct=s.total>0 ? Math.max(0,Math.min(100,Math.round(s.received/s.total*100))) : 0;
+    const bar=$('#updBar'); if(bar) bar.style.width=pct+'%';
+    const pc=$('#updPct'); if(pc) pc.textContent=pct+'%';
+    const ph=$('#updPhase'); if(ph) ph.textContent=s.phase==='VERIFYING'?'Verifying SHA-256…':'Downloading…';
+    const by=$('#updBytes'); if(by) by.textContent=fmtMB(s.received)+' / '+fmtMB(s.total);
+  }
+  const btn=(id,label)=>`<button id="${id}" class="text-xs px-3 py-1.5 rounded-full border" style="border-color:var(--border);background:var(--bg);color:var(--text-muted)">${label}</button>`;
+  const btnAccent=(id,label)=>`<button id="${id}" class="text-xs px-3 py-1.5 rounded-full border font-medium" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%, transparent);color:var(--text-bright)">${label}</button>`;
+  let html='';
+  if(s.phase==='CHECKING') setUpdMsg('Checking GitHub releases…');
+  else if(s.phase==='ERROR') setUpdMsg('⚠ '+(s.error||'Something went wrong.'));
+  else if(s.phase==='RESTARTING') setUpdMsg('Restarting to apply the update… you can close this tab.');
+  else if(s.phase==='READY'){
+    setUpdMsg('');
+    html=btnAccent('updRestart','Restart now')+btn('updManualToggle', (man&&!man.classList.contains('hidden'))?'Hide manual steps':"I'll restart myself")+btn('updDiscard','Discard staged');
+    if(man){ man.classList.remove('hidden'); man.innerHTML=updManualHtml(s); }
+  }
+  else if(s.updateAvailable){
+    setUpdMsg('v'+s.latest+' is available ('+fmtMB(s.assetSize||s.total)+').');
+    html=btnAccent('updDownload','Download v'+s.latest);
+    if(man){ man.classList.add('hidden'); man.innerHTML=''; }
+  }
+  else {
+    setUpdMsg(s.note||(s.latest ? 'Up to date.' : 'Press check — nothing phones home until you do.'));
+    if(man){ man.classList.add('hidden'); man.innerHTML=''; }
+  }
+  if(act) act.innerHTML=html;
+  const chk=$('#updCheck'); if(chk) chk.style.opacity=updBusy()?'0.5':'';
+}
+document.addEventListener('click', e=>{
+  if(!e.target) return;
+  if(e.target.id==='updCheck') updCheck();
+  else if(e.target.id==='updDownload') updDownload();
+  else if(e.target.id==='updRestart') updRestart();
+  else if(e.target.id==='updDiscard') updDiscard();
+  else if(e.target.id==='updManualToggle'){ const man=$('#updManual'); if(man) man.classList.toggle('hidden'); if(updState) renderUpdateStatus(updState); }
+});
 function switchTab(tab){
+  if(tab==='stats'){ try{ loadStats(); }catch(e){} }
+  if(tab==='update'){ try{ refreshUpdateStatus(); }catch(e){} }
   const current=document.querySelector('.tab-panel:not(.hidden)');
   const next=document.getElementById('tab-'+tab);
   if(current && next && current!==next){
@@ -1360,8 +1716,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   const centerBtn=document.querySelector('#editorCenterBtn');
   if(centerBtn) centerBtn.onclick=()=>{
     const targetId=getEditorTargetId(); if(!targetId) return;
-    const nx=Math.max(0, Math.round((windowSize.scaledWidth||640)/2)-20);
-    const ny=Math.max(0, Math.round((windowSize.scaledHeight||360)/2)-10);
+    // Prefer the pill's live size so measured/keystroke boxes truly center.
+    let cw=EDITOR_CENTER_W, ch=EDITOR_CENTER_H;
+    try{
+      const pv=(window.modulePreviews||{})[targetId];
+      if(pv && ((pv.w||0)>0 || (pv.h||0)>0)){ cw=pv.w||cw; ch=pv.h||ch; }
+    }catch(e){}
+    const nx=Math.max(0, Math.round((windowSize.scaledWidth||640)/2)-cw/2);
+    const ny=Math.max(0, Math.round((windowSize.scaledHeight||360)/2)-ch/2);
     const mod=config.modules[targetId]=config.modules[targetId]||{x:10,y:10,scale:1,opacity:1,enabled:false};
     mod.x=nx; mod.y=ny;
     send({type:'UPDATE_MODULE', id:targetId, data:{x:nx, y:ny}}); syncEditorItem();

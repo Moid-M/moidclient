@@ -12,8 +12,30 @@ import java.lang.reflect.Field;
  */
 public final class FullbrightManager {
     private static double originalGamma = -1;
+    // Cached reflection for the option's raw value field (resolved once per
+    // option class instead of walked + setAccessible on every tick).
+    private static Field cachedValueField = null;
+    private static Class<?> cachedValueClass = null;
 
     private FullbrightManager() {}
+
+    /** Raw value field of a vanilla option, or null if unresolvable. */
+    private static Field valueFieldOf(Object opt) {
+        if (opt == null) return null;
+        Class<?> c = opt.getClass();
+        if (cachedValueField != null && c == cachedValueClass) return cachedValueField;
+        Field f = null;
+        Class<?> cur = c;
+        while (cur != null) {
+            try { f = cur.getDeclaredField("value"); break; } catch (NoSuchFieldException e) { cur = cur.getSuperclass(); }
+        }
+        if (f != null) {
+            try { f.setAccessible(true); } catch (Exception ignored) {}
+        }
+        cachedValueField = f;
+        cachedValueClass = c;
+        return f;
+    }
 
     public static ModuleDef definition() {
         return new ModuleDef("fullbright", "Fullbright", "Gamma boost for dark areas - no overlay.", "visuals", false, "sun", false,
@@ -30,32 +52,21 @@ public final class FullbrightManager {
             var opt = mc.options.gamma();
             if (fb != null && fb.enabled) {
                 double target = fb.fullbrightGamma;
-                if (target < 1) target = 12; if (target > 15) target = 15;
+                if (Double.isNaN(target)) target = 12;
+                if (target < 1) target = 1; if (target > 15) target = 15;
                 if (originalGamma < 0) originalGamma = opt.get();
                 boolean setDirect = false;
-                try {
-                    Field f = null;
-                    Class<?> c = opt.getClass();
-                    while (c != null) {
-                        try { f = c.getDeclaredField("value"); break; } catch (NoSuchFieldException e) { c = c.getSuperclass(); }
-                    }
-                    if (f != null) {
-                        f.setAccessible(true);
-                        f.set(opt, target);
-                        setDirect = true;
-                    }
-                } catch (Exception ignored) {}
+                Field f = valueFieldOf(opt);
+                if (f != null) {
+                    try { f.set(opt, target); setDirect = true; } catch (Exception ignored) {}
+                }
                 if (!setDirect) {
                     try { opt.set(Math.min(target, 1.0)); } catch (Exception ignored) {}
                 }
             } else if (originalGamma >= 0) {
+                Field f = valueFieldOf(opt);
                 try {
-                    Field f = null;
-                    Class<?> c = opt.getClass();
-                    while (c != null) {
-                        try { f = c.getDeclaredField("value"); break; } catch (NoSuchFieldException e) { c = c.getSuperclass(); }
-                    }
-                    if (f != null) { f.setAccessible(true); f.set(opt, originalGamma); }
+                    if (f != null) f.set(opt, originalGamma);
                     else opt.set(originalGamma);
                 } catch (Exception ex) {
                     try { opt.set(originalGamma); } catch (Exception ignored) {}
@@ -65,24 +76,14 @@ public final class FullbrightManager {
         } catch (Exception ignored) {}
     }
 
-    /** True while the gamma override is live (an out-of-range value is set). */
-    public static boolean isOverriding() {
-        return originalGamma >= 0;
-    }
-
     /** Writes a raw gamma straight to the option field (bypasses validation). */
     public static void writeGammaRaw(double value) {
         try {
             var mc = Minecraft.getInstance();
             if (mc == null || mc.options == null) return;
             var opt = mc.options.gamma();
-            Field f = null;
-            Class<?> c = opt.getClass();
-            while (c != null) {
-                try { f = c.getDeclaredField("value"); break; } catch (NoSuchFieldException e) { c = c.getSuperclass(); }
-            }
+            Field f = valueFieldOf(opt);
             if (f == null) return;
-            f.setAccessible(true);
             f.set(opt, value);
         } catch (Exception ignored) {}
     }
@@ -94,13 +95,5 @@ public final class FullbrightManager {
     public static void onSaveStart() {
         if (originalGamma < 0) return;
         writeGammaRaw(Math.max(0.0, Math.min(1.0, originalGamma)));
-    }
-
-    /**
-     * Called at the tail of Options.save: nothing to do here on purpose.
-     * The next client tick re-applies the boost via onTick; if the game is
-     * closing there are no more ticks, which is exactly what we want.
-     */
-    public static void onSaveEnd() {
     }
 }

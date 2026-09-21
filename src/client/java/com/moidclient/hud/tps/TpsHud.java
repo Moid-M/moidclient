@@ -13,8 +13,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.DeltaTracker;
 import org.joml.Matrix3x2fStack;
 
-import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.Locale;
 
 /**
@@ -24,8 +24,11 @@ import java.util.Locale;
  * Category: HUD
  */
 public final class TpsHud {
-    private static final Deque<long[]> SAMPLES = new ArrayDeque<>();
+    // Lock-free: render thread writes, WS-preview thread reads via getCurrentTps.
+    private static final Deque<long[]> SAMPLES = new ConcurrentLinkedDeque<>();
     private static double lastTps = 20.0;
+    // Displayed value eases toward the sample (classic smooth readout).
+    private static double displayedTps = 20.0;
 
     private TpsHud() {}
 
@@ -48,6 +51,13 @@ public final class TpsHud {
         if (HudCompat.isHudHidden(Minecraft.getInstance())) return;
 
         double tpsVal = sample();
+        float dtSec = 0.05f;
+        try {
+            if (deltaTracker != null) dtSec = Math.max(0f, deltaTracker.getRealtimeDeltaTicks() / 20f);
+        } catch (Exception ignored) {}
+        double k = 1.0 - Math.exp(-3.0 * Math.max(0.0, dtSec));
+        displayedTps += (tpsVal - displayedTps) * k;
+        tpsVal = displayedTps;
         String fmt = mod.format != null && !mod.format.isEmpty() ? mod.format : "TPS: {tps}";
         String text = fmt.replace("{tps}", formatTps(tpsVal)).replace("{value}", formatTps(tpsVal));
 
@@ -69,6 +79,7 @@ public final class TpsHud {
         if (scale <= 0) scale = 1.0;
 
         Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -79,7 +90,9 @@ public final class TpsHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, textW + 3, textH + 3, bg);
             }
             graphics.text(font, text, 0, 0, color, shadow);
@@ -112,7 +125,33 @@ public final class TpsHud {
     private static double sample() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.level == null) return lastTps;
+            if (mc == null) return lastTps;
+            // Singleplayer: measure the integrated server thread directly.
+            // Game-time sampling goes blind when the render thread itself is
+            // dying (fewer than 2 samples per 3s window freezes the display
+            // at its last value) - MSPT never lies.
+            try {
+                var server = mc.getSingleplayerServer();
+                if (server != null) {
+                    long avgNanos = server.getAverageTickTimeNanos();
+                    if (avgNanos > 0) {
+                        lastTps = Math.max(0.0, Math.min(20.0, 1_000_000_000.0 / avgNanos));
+                        return lastTps;
+                    }
+                }
+            } catch (Exception ignored) {}
+            if (mc.level == null) {
+                // disconnected/menu: drop stale samples so the HUD never
+                // shows the last server's TPS outside a world.
+                try {
+                    if (mc.getSingleplayerServer() == null) {
+                        SAMPLES.clear();
+                        lastTps = 20.0;
+                        displayedTps = 20.0;
+                    }
+                } catch (Exception ignored) {}
+                return lastTps;
+            }
             // Paused singleplayer advances no ticks while the clock runs -
             // freeze the display instead of tanking to 0. Clearing keeps the
             // post-resume reading clean (no dip from the paused span).

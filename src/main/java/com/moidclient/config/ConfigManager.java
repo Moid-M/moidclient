@@ -10,8 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -185,7 +183,7 @@ public class ConfigManager {
 
     public ConfigManager() {
         File configDir = FabricLoader.getInstance().getConfigDir().toFile();
-        if (!configDir.exists()) configDir.mkdirs();
+        if (!configDir.exists() && !configDir.mkdirs()) LOGGER.warn("[MoidClient] Could not create config dir {}", configDir);
         this.configFile = new File(configDir, FILE_NAME);
         loadOrCreate();
     }
@@ -201,28 +199,31 @@ public class ConfigManager {
         if (!configFile.exists()) {
             File old = new File(configFile.getParentFile(), "MoidClient.json");
             if (old.exists()) {
-                try (FileReader r = new FileReader(old)) {
+                try (java.io.Reader r = new java.io.InputStreamReader(new java.io.FileInputStream(old), java.nio.charset.StandardCharsets.UTF_8)) {
                     JsonObject j = JsonParser.parseReader(r).getAsJsonObject();
                     this.root = j;
                     if (j.has("accentColor")) {
-                        String c = j.get("accentColor").getAsString();
-                        if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
+                        String c = safeString(j, "accentColor");
+                        if (c != null && c.matches(HEX_PATTERN)) accentColor = c;
                     }
                     if (j.has("themeTextColor")) {
-                        String c = j.get("themeTextColor").getAsString();
-                        if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+                        String c = safeString(j, "themeTextColor");
+                        if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
                     } else if (j.has("textColor")) {
-                        String c = j.get("textColor").getAsString();
-                        if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+                        String c = safeString(j, "textColor");
+                        if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
                     }
                     if (j.has("modules") && j.get("modules").isJsonObject()) {
                         JsonObject mods = j.getAsJsonObject("modules");
                         for (var e : mods.entrySet()) {
-                            ModuleConfig cfg = GSON.fromJson(e.getValue(), ModuleConfig.class);
-                            modules.put(e.getKey(), cfg);
+                            try {
+                                ModuleConfig cfg = GSON.fromJson(e.getValue(), ModuleConfig.class);
+                                modules.put(e.getKey(), cfg);
+                            } catch (Exception ex) {
+                                LOGGER.warn("[MoidClient] Skipping corrupt module entry '{}' during migration", e.getKey());
+                            }
                         }
                     }
-                    ensureDefaults(false);
                     // fill missing ping defaults
                     fillMissingDefaults();
                     save();
@@ -235,31 +236,35 @@ public class ConfigManager {
             LOGGER.info("[MoidClient] Created default config at {}", configFile.getAbsolutePath());
             return;
         }
-        try (FileReader reader = new FileReader(configFile)) {
+        try (java.io.Reader reader = new java.io.InputStreamReader(new java.io.FileInputStream(configFile), java.nio.charset.StandardCharsets.UTF_8)) {
             JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
             this.root = json;
-            // accent - validated
+            // accent - validated (per-field guarded: one corrupt value must not wipe the config)
             if (json.has("accentColor")) {
-                String c = json.get("accentColor").getAsString();
-                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
+                String c = safeString(json, "accentColor");
+                if (c != null && c.matches(HEX_PATTERN)) accentColor = c;
             }
             if (json.has("themeTextColor")) {
-                String c = json.get("themeTextColor").getAsString();
-                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+                String c = safeString(json, "themeTextColor");
+                if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
             } else if (json.has("textColor")) {
-                String c = json.get("textColor").getAsString();
-                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+                String c = safeString(json, "textColor");
+                if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
             }
-            // modules
+            // modules (per-entry guarded: a corrupt module is skipped, the rest load)
             if (json.has("modules") && json.get("modules").isJsonObject()) {
                 JsonObject mods = json.getAsJsonObject("modules");
                 for (var entry : mods.entrySet()) {
-                    ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
-                    modules.put(entry.getKey(), cfg);
+                    try {
+                        ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
+                        modules.put(entry.getKey(), cfg);
+                    } catch (Exception ex) {
+                        LOGGER.warn("[MoidClient] Skipping corrupt module entry '{}'", entry.getKey());
+                    }
                 }
             }
-            // ensure all expected modules exist
-            ensureDefaults(false);
+            // heal/clamp explicit fields; missing modules are seeded from
+            // definitions by ModuleRegistry.applyOptionDefaults after load.
             fillMissingDefaults();
             LOGGER.info("[MoidClient] Loaded config from {}", configFile.getAbsolutePath());
         } catch (Exception e) {
@@ -273,46 +278,27 @@ public class ConfigManager {
         root = new JsonObject();
         accentColor = DEFAULT_ACCENT;
         modules.clear();
-        ensureDefaults(true);
-    }
-
-    /**
-     * Ensure all HUD modules exist. If `overwrite` false, only add missing.
-     */
-    private void ensureDefaults(boolean overwrite) {
-        registerDefault("ping", new ModuleConfig(false, 10, 50), overwrite);
-        registerDefault("fpsCounter", new ModuleConfig(false, 10, 10), overwrite);
-        registerDefault("tpsCounter", new ModuleConfig(false, 10, 70), overwrite);
-        registerDefault("cpsCounter", new ModuleConfig(false, 10, 30), overwrite);
-        registerDefault("keystrokes", new ModuleConfig(false, 10, 90), overwrite);
-        registerDefault("coords", new ModuleConfig(false, 10, 110), overwrite);
-        registerDefault("server", new ModuleConfig(false, 10, 130), overwrite);
-        registerDefault("clock", new ModuleConfig(false, 10, 150), overwrite);
-        registerDefault("biome", new ModuleConfig(false, 10, 170), overwrite);
-        registerDefault("sessionTimer", new ModuleConfig(false, 10, 190), overwrite);
-        registerDefault("potionEffects", new ModuleConfig(false, 10, 210), overwrite);
-        registerDefault("armorStatus", new ModuleConfig(false, 10, 230), overwrite);
-        registerDefault("fullbright", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("blockOutline", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("perspectiveSkip", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("zoom", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("freelook", new ModuleConfig(false, 0, 0), overwrite);
-        registerDefault("hitboxes", new ModuleConfig(false, 0, 0), overwrite);
-        // removed: testModule, armorStatus, fpsBoost (not implemented)
-    }
-
-    private void registerDefault(String id, ModuleConfig cfg, boolean overwrite) {
-        if (overwrite || !modules.containsKey(id)) {
-            modules.put(id, cfg);
-        }
+        // Missing modules are seeded from their definitions by
+        // ModuleRegistry.applyOptionDefaults (client sourceset owns the id
+        // list, so this class no longer names any module). Until that runs,
+        // the map is simply empty - every reader null-guards getModule().
     }
 
     private void fillMissingDefaults() {
+        // heal corrupt (null-deserialized) entries in place; the healing
+        // below fills blanks with defaults.
+        for (var e : modules.entrySet()) {
+            if (e.getValue() == null) e.setValue(new ModuleConfig());
+        }
         // remove old unused modules (keep cpsCounter now implemented)
-        modules.keySet().removeIf(k -> k.equals("testModule") || k.equals("armorStatus") || k.equals("fpsBoost"));
+        modules.keySet().removeIf(k -> k.equals("testModule") || k.equals("fpsBoost"));
         for (var e : modules.entrySet()) {
             ModuleConfig c = e.getValue();
             if (c.custom == null) c.custom = new LinkedHashMap<>();
+            // Drop stale known-keys from custom (older versions leaked some
+            // in): explicit fields are the source of truth, and toJson
+            // flattening must not let the stale copy shadow them.
+            c.custom.keySet().removeIf(ConfigManager::isKnownModuleKey);
             if (c.backgroundColor == null) c.backgroundColor = "#1A1B20";
             if (c.backgroundOpacity == 0) {
                 // migrate from old opacity*0.85 or default 0.85
@@ -469,7 +455,7 @@ public class ConfigManager {
             // NOTE: File.renameTo() cannot replace an existing file on Windows
             // (fails silently with `false`), so use Files.move instead.
             File tmp = new File(configFile.getParentFile(), configFile.getName() + ".tmp");
-            try (FileWriter writer = new FileWriter(tmp)) {
+            try (java.io.Writer writer = new java.io.OutputStreamWriter(new java.io.FileOutputStream(tmp), java.nio.charset.StandardCharsets.UTF_8)) {
                 GSON.toJson(out, writer);
             }
             try {
@@ -480,43 +466,61 @@ public class ConfigManager {
             }
         } catch (Exception e) {
             LOGGER.error("[MoidClient] Failed to save config", e);
+            try {
+                File tmp = new File(configFile.getParentFile(), configFile.getName() + ".tmp");
+                java.nio.file.Files.deleteIfExists(tmp.toPath());
+            } catch (Exception ignored) {}
         }
     }
 
-    public String getAccentColor() {
+    public synchronized String getAccentColor() {
         return accentColor;
     }
 
-    public void setAccentColor(String color) {
-        if (color != null && color.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
+    public synchronized void setAccentColor(String color) {
+        if (color != null && color.matches(HEX_PATTERN)) {
             this.accentColor = color;
             save();
         }
     }
 
-    public String getThemeTextColor() { return themeTextColor; }
-    public void setThemeTextColor(String color) {
-        if (color != null && color.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
+    public synchronized String getThemeTextColor() { return themeTextColor; }
+    public synchronized void setThemeTextColor(String color) {
+        if (color != null && color.matches(HEX_PATTERN)) {
             this.themeTextColor = color;
             save();
         }
     }
 
-    public Map<String, ModuleConfig> getModules() {
+    public synchronized Map<String, ModuleConfig> getModules() {
         return modules;
     }
 
-    public ModuleConfig getModule(String id) {
+    public synchronized ModuleConfig getModule(String id) {
         return modules.get(id);
     }
 
-    public JsonObject toJson() {
+    public synchronized JsonObject toJson() {
         JsonObject out = new JsonObject();
         out.addProperty("accentColor", accentColor);
         out.addProperty("themeTextColor", themeTextColor);
         JsonObject mods = new JsonObject();
         for (Map.Entry<String, ModuleConfig> e : modules.entrySet()) {
-            mods.add(e.getKey(), GSON.toJsonTree(e.getValue()));
+            JsonObject tree = GSON.toJsonTree(e.getValue()).getAsJsonObject();
+            // Flatten custom so the dashboard reads/writes option keys
+            // directly (it treats module JSON as flat). Explicit fields win:
+            // stale duplicates from older versions must not shadow them.
+            JsonObject custom = null;
+            if (tree.has("custom") && tree.get("custom").isJsonObject()) {
+                custom = tree.getAsJsonObject("custom");
+            }
+            tree.remove("custom");
+            if (custom != null) {
+                for (var ce : custom.entrySet()) {
+                    if (!tree.has(ce.getKey())) tree.add(ce.getKey(), ce.getValue());
+                }
+            }
+            mods.add(e.getKey(), tree);
         }
         out.add("modules", mods);
         return out;
@@ -525,6 +529,66 @@ public class ConfigManager {
     /** Every key handled explicitly in {@link #updateModule}. Anything else
      * falls into {@code ModuleConfig.custom} (validated) so new options work
      * without editing this file. Keep in sync when adding explicit fields. */
+    private static final String HEX_PATTERN = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$";
+
+    /**
+     * Validation rule for one declared option, supplied by whoever owns the
+     * module definitions (the client-sourceset registry - this common class
+     * must not depend on it). Lets patch validation follow definitions so
+     * future and plugin options enforce ranges/allowlists with zero edits
+     * here. A null rule (or no provider) keeps the lenient base guards.
+     */
+    public static final class OptionRule {
+        public final String type;
+        public final Double min, max;
+        public final java.util.List<String> options;
+        public final boolean nullable;
+
+        private OptionRule(String type, Double min, Double max,
+                           java.util.List<String> options, boolean nullable) {
+            this.type = type;
+            this.min = min;
+            this.max = max;
+            this.options = options != null ? java.util.List.copyOf(options) : java.util.List.of();
+            this.nullable = nullable;
+        }
+
+        public static OptionRule slider(Double min, Double max) {
+            return new OptionRule("slider", min, max, null, false);
+        }
+
+        public static OptionRule select(java.util.List<String> options) {
+            return new OptionRule("select", null, null, options, false);
+        }
+
+        public static OptionRule color(boolean nullable) {
+            return new OptionRule("color", null, null, null, nullable);
+        }
+
+        public static OptionRule bool() {
+            return new OptionRule("boolean", null, null, null, false);
+        }
+
+        public static OptionRule keybind() {
+            return new OptionRule("keybind", null, null, null, false);
+        }
+
+        public static OptionRule text() {
+            return new OptionRule("text", null, null, null, false);
+        }
+    }
+
+    /** Source of {@link OptionRule}s, implemented against module definitions. */
+    public interface OptionSchema {
+        OptionRule ruleFor(String moduleId, String key);
+    }
+
+    private volatile OptionSchema optionSchema = null;
+
+    /** Wired once at startup (client owns the definitions). */
+    public void setOptionSchema(OptionSchema schema) {
+        this.optionSchema = schema;
+    }
     private static final java.util.Set<String> KNOWN_MODULE_KEYS = java.util.Set.of(
         "enabled", "x", "y", "scale", "opacity", "backgroundOpacity", "color",
         "background", "backgroundColor", "textColor", "format", "shadow",
@@ -539,7 +603,7 @@ public class ConfigManager {
         "hitboxWidth", "hitboxOpacity", "hitboxRange",
         "hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor",
         "zoomMode", "zoomKey", "zoomLevel", "zoomMinLevel", "zoomMaxLevel",
-        "zoomScrollAdjust", "zoomScrollStep", "zoomCinematic", "zoomSmooth", "zoomSmoothSpeed", "zoomLowerSensitivity",
+        "zoomScrollAdjust", "zoomScrollStep", "zoomCinematic", "zoomSmooth", "zoomSmoothOut", "zoomSmoothSpeed", "zoomLowerSensitivity",
         "freelookMode", "freelookKey", "freelookSensitivity",
         "potionColored", "potionShowAmplifier", "potionShowDuration", "potionShowAmbient",
         "potionMaxEffects", "armorShowDurability", "armorDurabilityMode", "armorDynamicColor",
@@ -550,150 +614,203 @@ public class ConfigManager {
         return key != null && KNOWN_MODULE_KEYS.contains(key);
     }
 
-    public void updateModule(String id, JsonObject data) {
+    /**
+     * Lenient WS readers: one malformed field returns its fallback instead of
+     * throwing and aborting the rest of the patch.
+     */
+    private static boolean getBool(JsonObject data, String key, boolean fallback) {
+        try {
+            if (data.has(key) && !data.get(key).isJsonNull()) return data.get(key).getAsBoolean();
+        } catch (Exception ignored) {}
+        return fallback;
+    }
+
+    private static int getInt(JsonObject data, String key, int fallback) {
+        try {
+            if (data.has(key) && !data.get(key).isJsonNull()) return data.get(key).getAsInt();
+        } catch (Exception ignored) {}
+        return fallback;
+    }
+
+    private static double getDouble(JsonObject data, String key, double fallback) {
+        try {
+            if (data.has(key) && !data.get(key).isJsonNull()) return data.get(key).getAsDouble();
+        } catch (Exception ignored) {}
+        return fallback;
+    }
+
+    private static String getString(JsonObject data, String key) {
+        try {
+            if (data.has(key) && !data.get(key).isJsonNull()) return data.get(key).getAsString();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /** Load-path string read: returns null for missing/null/non-string values instead of throwing. */
+    private static String safeString(JsonObject data, String key) {
+        try {
+            if (data.has(key) && data.get(key).isJsonPrimitive()
+                    && data.get(key).getAsJsonPrimitive().isString()) {
+                return data.get(key).getAsString();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public synchronized void updateModule(String id, JsonObject data) {
+        updateModule(id, data, true);
+    }
+
+    /**
+     * Applies a dashboard patch. Preview writes update memory only (no disk,
+     * no broadcast - the game reads live memory, the sender already shows
+     * its own values), so high-frequency drags stay smooth without hammering
+     * storage or the dashboard DOM; the release always sends a saving update.
+     */
+    public synchronized void updateModule(String id, JsonObject data, boolean save) {
         ModuleConfig cfg = modules.get(id);
         if (cfg == null) {
             cfg = new ModuleConfig();
             modules.put(id, cfg);
         }
         if (cfg.custom == null) cfg.custom = new LinkedHashMap<>();
-        if (data.has("enabled")) cfg.enabled = data.get("enabled").getAsBoolean();
-        if (data.has("x")) cfg.x = data.get("x").getAsInt();
-        if (data.has("y")) cfg.y = data.get("y").getAsInt();
-        if (data.has("scale")) cfg.scale = data.get("scale").getAsDouble();
-        if (data.has("opacity")) cfg.opacity = data.get("opacity").getAsDouble();
-        if (data.has("backgroundOpacity")) cfg.backgroundOpacity = data.get("backgroundOpacity").getAsDouble();
-        if (data.has("color") && !data.get("color").isJsonNull()) cfg.color = data.get("color").getAsString();
-        if (data.has("background")) cfg.background = data.get("background").getAsBoolean();
-        if (data.has("backgroundColor") && !data.get("backgroundColor").isJsonNull()) {
-            String c = data.get("backgroundColor").getAsString();
-            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) cfg.backgroundColor = c;
-        }
+        cfg.enabled = getBool(data, "enabled", cfg.enabled);
+        cfg.x = Math.max(-10000, Math.min(10000, getInt(data, "x", cfg.x)));
+        cfg.y = Math.max(-10000, Math.min(10000, getInt(data, "y", cfg.y)));
+        double scale = getDouble(data, "scale", cfg.scale);
+        if (scale > 0) cfg.scale = Math.min(10.0, scale);
+        double opacity = getDouble(data, "opacity", cfg.opacity);
+        cfg.opacity = Math.max(0.2, Math.min(1.0, opacity == 0 ? 1.0 : opacity));
+        cfg.backgroundOpacity = Math.max(0, Math.min(1, getDouble(data, "backgroundOpacity", cfg.backgroundOpacity)));
+        String color = getString(data, "color");
+        if (color != null && color.matches(HEX_PATTERN)) cfg.color = color;
+        cfg.background = getBool(data, "background", cfg.background);
+        String bgColor = getString(data, "backgroundColor");
+        if (bgColor != null && bgColor.matches(HEX_PATTERN)) cfg.backgroundColor = bgColor;
         if (data.has("textColor")) {
             if (data.get("textColor").isJsonNull()) cfg.textColor = null;
             else {
-                String c = data.get("textColor").getAsString();
-                if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.textColor = c;
+                String c = getString(data, "textColor");
+                if (c != null && (c.isEmpty() || c.matches(HEX_PATTERN))) cfg.textColor = c;
             }
         }
-        if (data.has("format") && !data.get("format").isJsonNull()) cfg.format = data.get("format").getAsString();
-        if (data.has("shadow")) cfg.shadow = data.get("shadow").getAsBoolean();
-        if (data.has("fpsMode") && !data.get("fpsMode").isJsonNull()) {
-            String m = data.get("fpsMode").getAsString();
-            if (m.equals("fast") || m.equals("stable")) cfg.fpsMode = m;
-        }
-        if (data.has("fpsDynamicColor")) cfg.fpsDynamicColor = data.get("fpsDynamicColor").getAsBoolean();
-        if (data.has("tpsDynamicColor")) cfg.tpsDynamicColor = data.get("tpsDynamicColor").getAsBoolean();
-        if (data.has("potionColored")) cfg.potionColored = data.get("potionColored").getAsBoolean();
-        if (data.has("potionShowAmplifier")) cfg.potionShowAmplifier = data.get("potionShowAmplifier").getAsBoolean();
-        if (data.has("potionShowDuration")) cfg.potionShowDuration = data.get("potionShowDuration").getAsBoolean();
-        if (data.has("potionShowAmbient")) cfg.potionShowAmbient = data.get("potionShowAmbient").getAsBoolean();
-        if (data.has("potionMaxEffects")) cfg.potionMaxEffects = data.get("potionMaxEffects").getAsInt();
-        if (data.has("armorShowDurability")) cfg.armorShowDurability = data.get("armorShowDurability").getAsBoolean();
-        if (data.has("armorLowWarn")) cfg.armorLowWarn = data.get("armorLowWarn").getAsBoolean();
-        if (data.has("armorDurabilityMode") && !data.get("armorDurabilityMode").isJsonNull()) {
-            String m = data.get("armorDurabilityMode").getAsString();
-            if (m.equals("number") || m.equals("percent")) cfg.armorDurabilityMode = m;
-        }
-        if (data.has("armorDynamicColor")) cfg.armorDynamicColor = data.get("armorDynamicColor").getAsBoolean();
-        if (data.has("armorOrientation") && !data.get("armorOrientation").isJsonNull()) {
-            String m = data.get("armorOrientation").getAsString();
-            if (m.equals("vertical") || m.equals("horizontal")) cfg.armorOrientation = m;
-        }
-        if (data.has("armorLabelSide") && !data.get("armorLabelSide").isJsonNull()) {
-            String m = data.get("armorLabelSide").getAsString();
-            if (m.equals("right") || m.equals("left") || m.equals("above") || m.equals("below")) cfg.armorLabelSide = m;
-        }
-        if (data.has("sessionScope") && !data.get("sessionScope").isJsonNull()) {
-            String m = data.get("sessionScope").getAsString();
-            if (m.equals("world") || m.equals("server") || m.equals("client")) cfg.sessionScope = m;
-        }
-        if (data.has("cpsMode") && !data.get("cpsMode").isJsonNull()) {
-            String m = data.get("cpsMode").getAsString();
-            if (m.equals("both") || m.equals("left") || m.equals("right")) cfg.cpsMode = m;
-        }
-        if (data.has("cpsDynamicColor")) cfg.cpsDynamicColor = data.get("cpsDynamicColor").getAsBoolean();
-        if (data.has("keystrokesShowMouse")) cfg.keystrokesShowMouse = data.get("keystrokesShowMouse").getAsBoolean();
-        if (data.has("keystrokesShowSpace")) cfg.keystrokesShowSpace = data.get("keystrokesShowSpace").getAsBoolean();
-        if (data.has("keystrokesShowShift")) cfg.keystrokesShowShift = data.get("keystrokesShowShift").getAsBoolean();
-        if (data.has("keystrokesShowW")) cfg.keystrokesShowW = data.get("keystrokesShowW").getAsBoolean();
-        if (data.has("keystrokesShowA")) cfg.keystrokesShowA = data.get("keystrokesShowA").getAsBoolean();
-        if (data.has("keystrokesShowS")) cfg.keystrokesShowS = data.get("keystrokesShowS").getAsBoolean();
-        if (data.has("keystrokesShowD")) cfg.keystrokesShowD = data.get("keystrokesShowD").getAsBoolean();
-        if (data.has("keystrokesShowCps")) cfg.keystrokesShowCps = data.get("keystrokesShowCps").getAsBoolean();
-        if (data.has("keystrokesGap")) cfg.keystrokesGap = data.get("keystrokesGap").getAsInt();
-        if (data.has("keystrokesOutline")) cfg.keystrokesOutline = data.get("keystrokesOutline").getAsBoolean();
+        String format = getString(data, "format");
+        if (format != null) cfg.format = format.length() > 512 ? format.substring(0, 512) : format;
+        cfg.shadow = getBool(data, "shadow", cfg.shadow);
+        String fpsMode = getString(data, "fpsMode");
+        if ("fast".equals(fpsMode) || "stable".equals(fpsMode)) cfg.fpsMode = fpsMode;
+        cfg.fpsDynamicColor = getBool(data, "fpsDynamicColor", cfg.fpsDynamicColor);
+        cfg.tpsDynamicColor = getBool(data, "tpsDynamicColor", cfg.tpsDynamicColor);
+        cfg.potionColored = getBool(data, "potionColored", cfg.potionColored);
+        cfg.potionShowAmplifier = getBool(data, "potionShowAmplifier", cfg.potionShowAmplifier);
+        cfg.potionShowDuration = getBool(data, "potionShowDuration", cfg.potionShowDuration);
+        cfg.potionShowAmbient = getBool(data, "potionShowAmbient", cfg.potionShowAmbient);
+        cfg.potionMaxEffects = Math.max(1, Math.min(10, getInt(data, "potionMaxEffects", cfg.potionMaxEffects)));
+        cfg.armorShowDurability = getBool(data, "armorShowDurability", cfg.armorShowDurability);
+        cfg.armorLowWarn = getBool(data, "armorLowWarn", cfg.armorLowWarn);
+        String armorMode = getString(data, "armorDurabilityMode");
+        if ("number".equals(armorMode) || "percent".equals(armorMode)) cfg.armorDurabilityMode = armorMode;
+        cfg.armorDynamicColor = getBool(data, "armorDynamicColor", cfg.armorDynamicColor);
+        String armorOrientation = getString(data, "armorOrientation");
+        if ("vertical".equals(armorOrientation) || "horizontal".equals(armorOrientation)) cfg.armorOrientation = armorOrientation;
+        String armorLabelSide = getString(data, "armorLabelSide");
+        if ("right".equals(armorLabelSide) || "left".equals(armorLabelSide) || "above".equals(armorLabelSide) || "below".equals(armorLabelSide)) cfg.armorLabelSide = armorLabelSide;
+        String sessionScope = getString(data, "sessionScope");
+        if ("world".equals(sessionScope) || "server".equals(sessionScope) || "client".equals(sessionScope)) cfg.sessionScope = sessionScope;
+        String cpsMode = getString(data, "cpsMode");
+        if ("both".equals(cpsMode) || "left".equals(cpsMode) || "right".equals(cpsMode)) cfg.cpsMode = cpsMode;
+        cfg.cpsDynamicColor = getBool(data, "cpsDynamicColor", cfg.cpsDynamicColor);
+        cfg.keystrokesShowMouse = getBool(data, "keystrokesShowMouse", cfg.keystrokesShowMouse);
+        cfg.keystrokesShowSpace = getBool(data, "keystrokesShowSpace", cfg.keystrokesShowSpace);
+        cfg.keystrokesShowShift = getBool(data, "keystrokesShowShift", cfg.keystrokesShowShift);
+        cfg.keystrokesShowW = getBool(data, "keystrokesShowW", cfg.keystrokesShowW);
+        cfg.keystrokesShowA = getBool(data, "keystrokesShowA", cfg.keystrokesShowA);
+        cfg.keystrokesShowS = getBool(data, "keystrokesShowS", cfg.keystrokesShowS);
+        cfg.keystrokesShowD = getBool(data, "keystrokesShowD", cfg.keystrokesShowD);
+        cfg.keystrokesShowCps = getBool(data, "keystrokesShowCps", cfg.keystrokesShowCps);
+        cfg.keystrokesGap = Math.max(0, Math.min(64, getInt(data, "keystrokesGap", cfg.keystrokesGap)));
+        cfg.keystrokesOutline = getBool(data, "keystrokesOutline", cfg.keystrokesOutline);
         if (data.has("keystrokesPressedColor")) {
             if (data.get("keystrokesPressedColor").isJsonNull()) cfg.keystrokesPressedColor = null;
-            else cfg.keystrokesPressedColor = data.get("keystrokesPressedColor").getAsString();
+            else {
+                String c = getString(data, "keystrokesPressedColor");
+                if (c != null && (c.isEmpty() || c.matches(HEX_PATTERN))) cfg.keystrokesPressedColor = c;
+            }
         }
-        if (data.has("fullbrightGamma")) cfg.fullbrightGamma = data.get("fullbrightGamma").getAsDouble();
-        if (data.has("blockOutlineWidth")) cfg.blockOutlineWidth = data.get("blockOutlineWidth").getAsDouble();
-        if (data.has("blockOutlineFade")) cfg.blockOutlineFade = data.get("blockOutlineFade").getAsBoolean();
+        cfg.fullbrightGamma = Math.max(1.0, Math.min(15.0, getDouble(data, "fullbrightGamma", cfg.fullbrightGamma)));
+        cfg.blockOutlineWidth = Math.max(1.0, Math.min(5.0, getDouble(data, "blockOutlineWidth", cfg.blockOutlineWidth)));
+        cfg.blockOutlineFade = getBool(data, "blockOutlineFade", cfg.blockOutlineFade);
         if (data.has("blockOutlineColor2")) {
             if (data.get("blockOutlineColor2").isJsonNull()) cfg.blockOutlineColor2 = null;
             else {
-                String c = data.get("blockOutlineColor2").getAsString();
-                if (c != null && (c.isEmpty() || c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"))) cfg.blockOutlineColor2 = c.isEmpty() ? null : c;
+                String c = getString(data, "blockOutlineColor2");
+                if (c != null && (c.isEmpty() || c.matches(HEX_PATTERN))) cfg.blockOutlineColor2 = c.isEmpty() ? null : c;
             }
         }
-        if (data.has("blockOutlineMode") && !data.get("blockOutlineMode").isJsonNull()) {
-            String m = data.get("blockOutlineMode").getAsString();
-            if (m.equals("block") || m.equals("face")) cfg.blockOutlineMode = m;
-        }
-        if (data.has("perspectiveSkipMode") && !data.get("perspectiveSkipMode").isJsonNull()) {
-            String m = data.get("perspectiveSkipMode").getAsString();
-            if (m.equals("skipBack") || m.equals("skipFront")) cfg.perspectiveSkipMode = m;
-        }
-        if (data.has("zoomLevel")) cfg.zoomLevel = data.get("zoomLevel").getAsDouble();
-        if (data.has("zoomMinLevel")) cfg.zoomMinLevel = data.get("zoomMinLevel").getAsDouble();
-        if (data.has("zoomMaxLevel")) cfg.zoomMaxLevel = data.get("zoomMaxLevel").getAsDouble();
-        if (data.has("zoomScrollAdjust")) cfg.zoomScrollAdjust = data.get("zoomScrollAdjust").getAsBoolean();
-        if (data.has("zoomScrollStep")) cfg.zoomScrollStep = data.get("zoomScrollStep").getAsDouble();
-        if (data.has("zoomCinematic")) cfg.zoomCinematic = data.get("zoomCinematic").getAsBoolean();
-        if (data.has("zoomSmooth")) cfg.zoomSmooth = data.get("zoomSmooth").getAsBoolean();
-        if (data.has("zoomSmoothOut")) cfg.zoomSmoothOut = data.get("zoomSmoothOut").getAsBoolean();
-        if (data.has("zoomSmoothSpeed")) cfg.zoomSmoothSpeed = data.get("zoomSmoothSpeed").getAsDouble();
-        if (data.has("zoomLowerSensitivity")) cfg.zoomLowerSensitivity = data.get("zoomLowerSensitivity").getAsBoolean();
-        if (data.has("zoomKey")) cfg.zoomKey = data.get("zoomKey").getAsInt();
-        if (data.has("zoomMode") && !data.get("zoomMode").isJsonNull()) {
-            String m = data.get("zoomMode").getAsString();
-            if (m.equals("hold") || m.equals("toggle")) cfg.zoomMode = m;
-        }
-        if (data.has("freelookMode") && !data.get("freelookMode").isJsonNull()) {
-            String m = data.get("freelookMode").getAsString();
-            if (m.equals("hold") || m.equals("toggle")) cfg.freelookMode = m;
-        }
-        if (data.has("freelookSensitivity")) cfg.freelookSensitivity = data.get("freelookSensitivity").getAsDouble();
-        if (data.has("freelookKey")) cfg.freelookKey = data.get("freelookKey").getAsInt();
-        if (data.has("hitboxPlayers")) cfg.hitboxPlayers = data.get("hitboxPlayers").getAsBoolean();
-        if (data.has("hitboxHostiles")) cfg.hitboxHostiles = data.get("hitboxHostiles").getAsBoolean();
-        if (data.has("hitboxPassives")) cfg.hitboxPassives = data.get("hitboxPassives").getAsBoolean();
-        if (data.has("hitboxOther")) cfg.hitboxOther = data.get("hitboxOther").getAsBoolean();
-        if (data.has("hitboxEyeLine")) cfg.hitboxEyeLine = data.get("hitboxEyeLine").getAsBoolean();
-        if (data.has("hitboxEyeLength")) cfg.hitboxEyeLength = data.get("hitboxEyeLength").getAsDouble();
-        if (data.has("hitboxPadding")) cfg.hitboxPadding = data.get("hitboxPadding").getAsDouble();
-        if (data.has("hitboxRenderRate") && !data.get("hitboxRenderRate").isJsonNull()) {
-            String r = data.get("hitboxRenderRate").getAsString();
-            if (r.equals("Every frame") || r.equals("Every 2nd frame") || r.equals("Every 3rd frame")) cfg.hitboxRenderRate = r;
-        }
-        if (data.has("hitboxWidth")) cfg.hitboxWidth = data.get("hitboxWidth").getAsDouble();
-        if (data.has("hitboxOpacity")) cfg.hitboxOpacity = data.get("hitboxOpacity").getAsDouble();
-        if (data.has("hitboxRange")) cfg.hitboxRange = data.get("hitboxRange").getAsDouble();
+        String blockOutlineMode = getString(data, "blockOutlineMode");
+        if ("block".equals(blockOutlineMode) || "face".equals(blockOutlineMode)) cfg.blockOutlineMode = blockOutlineMode;
+        String perspectiveSkipMode = getString(data, "perspectiveSkipMode");
+        if ("skipBack".equals(perspectiveSkipMode) || "skipFront".equals(perspectiveSkipMode)) cfg.perspectiveSkipMode = perspectiveSkipMode;
+        double zoomMinLevel = getDouble(data, "zoomMinLevel", cfg.zoomMinLevel);
+        cfg.zoomMinLevel = Math.max(1.0, Math.min(10.0, zoomMinLevel <= 0 ? 1.5 : zoomMinLevel));
+        double zoomMaxLevel = getDouble(data, "zoomMaxLevel", cfg.zoomMaxLevel);
+        cfg.zoomMaxLevel = Math.max(2.0, Math.min(12.0, zoomMaxLevel <= 0 ? 10.0 : zoomMaxLevel));
+        if (cfg.zoomMinLevel <= 0) cfg.zoomMinLevel = 1.5;
+        if (cfg.zoomMaxLevel <= 0) cfg.zoomMaxLevel = 10.0;
+        if (cfg.zoomMaxLevel < cfg.zoomMinLevel) cfg.zoomMaxLevel = cfg.zoomMinLevel;
+        double zoomLevel = getDouble(data, "zoomLevel", cfg.zoomLevel);
+        if (zoomLevel == 0) zoomLevel = 4.0;
+        cfg.zoomLevel = Math.max(cfg.zoomMinLevel, Math.min(cfg.zoomMaxLevel, zoomLevel));
+        cfg.zoomScrollAdjust = getBool(data, "zoomScrollAdjust", cfg.zoomScrollAdjust);
+        double zoomScrollStep = getDouble(data, "zoomScrollStep", cfg.zoomScrollStep);
+        cfg.zoomScrollStep = Math.max(0.25, Math.min(2.0, zoomScrollStep == 0 ? 1.0 : zoomScrollStep));
+        cfg.zoomCinematic = getBool(data, "zoomCinematic", cfg.zoomCinematic);
+        cfg.zoomSmooth = getBool(data, "zoomSmooth", cfg.zoomSmooth);
+        cfg.zoomSmoothOut = getBool(data, "zoomSmoothOut", cfg.zoomSmoothOut);
+        double zoomSmoothSpeed = getDouble(data, "zoomSmoothSpeed", cfg.zoomSmoothSpeed);
+        cfg.zoomSmoothSpeed = Math.max(0.05, Math.min(1.0, zoomSmoothSpeed == 0 ? 0.4 : zoomSmoothSpeed));
+        cfg.zoomLowerSensitivity = getBool(data, "zoomLowerSensitivity", cfg.zoomLowerSensitivity);
+        int zoomKey = getInt(data, "zoomKey", cfg.zoomKey);
+        if (zoomKey > 0) cfg.zoomKey = zoomKey;
+        String zoomMode = getString(data, "zoomMode");
+        if ("hold".equals(zoomMode) || "toggle".equals(zoomMode)) cfg.zoomMode = zoomMode;
+        String freelookMode = getString(data, "freelookMode");
+        if ("hold".equals(freelookMode) || "toggle".equals(freelookMode)) cfg.freelookMode = freelookMode;
+        double freelookSensitivity = getDouble(data, "freelookSensitivity", cfg.freelookSensitivity);
+        cfg.freelookSensitivity = Math.max(0.25, Math.min(3.0, freelookSensitivity == 0 ? 1.0 : freelookSensitivity));
+        int freelookKey = getInt(data, "freelookKey", cfg.freelookKey);
+        if (freelookKey > 0) cfg.freelookKey = freelookKey;
+        cfg.hitboxPlayers = getBool(data, "hitboxPlayers", cfg.hitboxPlayers);
+        cfg.hitboxHostiles = getBool(data, "hitboxHostiles", cfg.hitboxHostiles);
+        cfg.hitboxPassives = getBool(data, "hitboxPassives", cfg.hitboxPassives);
+        cfg.hitboxOther = getBool(data, "hitboxOther", cfg.hitboxOther);
+        cfg.hitboxEyeLine = getBool(data, "hitboxEyeLine", cfg.hitboxEyeLine);
+        double hitboxEyeLength = getDouble(data, "hitboxEyeLength", cfg.hitboxEyeLength);
+        cfg.hitboxEyeLength = Math.max(1.0, Math.min(5.0, hitboxEyeLength == 0 ? 2.0 : hitboxEyeLength));
+        cfg.hitboxPadding = Math.max(0.0, Math.min(0.5, getDouble(data, "hitboxPadding", cfg.hitboxPadding)));
+        String hitboxRenderRate = getString(data, "hitboxRenderRate");
+        if ("Every frame".equals(hitboxRenderRate) || "Every 2nd frame".equals(hitboxRenderRate) || "Every 3rd frame".equals(hitboxRenderRate)) cfg.hitboxRenderRate = hitboxRenderRate;
+        double hitboxWidth = getDouble(data, "hitboxWidth", cfg.hitboxWidth);
+        cfg.hitboxWidth = Math.max(1.0, Math.min(5.0, hitboxWidth == 0 ? 2.0 : hitboxWidth));
+        double hitboxOpacity = getDouble(data, "hitboxOpacity", cfg.hitboxOpacity);
+        cfg.hitboxOpacity = Math.max(0.1, Math.min(1.0, hitboxOpacity == 0 ? 0.9 : hitboxOpacity));
+        double hitboxRange = getDouble(data, "hitboxRange", cfg.hitboxRange);
+        cfg.hitboxRange = Math.max(16.0, Math.min(128.0, hitboxRange == 0 ? 64.0 : hitboxRange));
         for (String colorKey : new String[]{"hitboxPlayersColor", "hitboxHostilesColor", "hitboxPassivesColor", "hitboxOtherColor"}) {
-            if (data.has(colorKey) && !data.get(colorKey).isJsonNull()) {
-                String c = data.get(colorKey).getAsString();
-                if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) {
-                    if (colorKey.equals("hitboxPlayersColor")) cfg.hitboxPlayersColor = c;
-                    else if (colorKey.equals("hitboxHostilesColor")) cfg.hitboxHostilesColor = c;
-                    else if (colorKey.equals("hitboxPassivesColor")) cfg.hitboxPassivesColor = c;
-                    else cfg.hitboxOtherColor = c;
-                }
+            String c = getString(data, colorKey);
+            if (c != null && c.matches(HEX_PATTERN)) {
+                if (colorKey.equals("hitboxPlayersColor")) cfg.hitboxPlayersColor = c;
+                else if (colorKey.equals("hitboxHostilesColor")) cfg.hitboxHostilesColor = c;
+                else if (colorKey.equals("hitboxPassivesColor")) cfg.hitboxPassivesColor = c;
+                else cfg.hitboxOtherColor = c;
             }
         }
         // Unknown keys (future/plugin options): keep validated primitives so
         // new options round-trip without code changes. Keys are restricted to
-        // plain identifiers, strings capped, no objects/arrays.
+        // plain identifiers, strings capped, no objects/arrays. Declared
+        // options additionally enforce their definition schema (slider ranges,
+        // select allowlists, color hex) when a provider is wired.
+        OptionSchema schema = this.optionSchema;
         for (var entry : data.entrySet()) {
             String key = entry.getKey();
             if (KNOWN_MODULE_KEYS.contains(key)) continue;
@@ -706,34 +823,109 @@ public class ConfigManager {
                 double number = primitive.getAsDouble();
                 if (Double.isNaN(number) || Double.isInfinite(number)) continue;
             }
-            cfg.custom.put(key, value.deepCopy());
+            JsonElement store = value.deepCopy();
+            if (schema != null) {
+                try {
+                    OptionRule rule = schema.ruleFor(id, key);
+                    if (rule != null) {
+                        store = applyRule(rule, primitive);
+                        if (store == null) continue;
+                    }
+                } catch (Exception ignored) {}
+            }
+            cfg.custom.put(key, store);
         }
-        save();
+        if (save) save();
     }
 
-    public void importFromJson(JsonObject json) {
+    /**
+     * Enforces one declared option rule on a patch value. Returns the value
+     * to store (possibly clamped), or null to drop the key.
+     */
+    private static JsonElement applyRule(OptionRule rule, com.google.gson.JsonPrimitive primitive) {
+        try {
+            switch (rule.type) {
+                case "slider" -> {
+                    if (!primitive.isNumber()) return null;
+                    double v = primitive.getAsDouble();
+                    if (Double.isNaN(v) || Double.isInfinite(v)) return null;
+                    if (rule.min != null) v = Math.max(rule.min, v);
+                    if (rule.max != null) v = Math.min(rule.max, v);
+                    return new com.google.gson.JsonPrimitive(v);
+                }
+                case "select" -> {
+                    if (!primitive.isString()) return null;
+                    return rule.options.contains(primitive.getAsString()) ? primitive.deepCopy() : null;
+                }
+                case "color" -> {
+                    if (!primitive.isString()) return null;
+                    String c = primitive.getAsString();
+                    if (c.isEmpty()) return rule.nullable ? primitive.deepCopy() : null;
+                    return c.matches(HEX_PATTERN) ? primitive.deepCopy() : null;
+                }
+                case "boolean" -> {
+                    return primitive.isBoolean() ? primitive.deepCopy() : null;
+                }
+                case "keybind" -> {
+                    return primitive.isNumber() ? primitive.deepCopy() : null;
+                }
+                default -> {
+                    return primitive.deepCopy();
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    public synchronized void importFromJson(JsonObject json) {
         if (json.has("accentColor")) {
-            String c = json.get("accentColor").getAsString();
-            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) accentColor = c;
+            String c = safeString(json, "accentColor");
+            if (c != null && c.matches(HEX_PATTERN)) accentColor = c;
         }
         if (json.has("themeTextColor")) {
-            String c = json.get("themeTextColor").getAsString();
-            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+            String c = safeString(json, "themeTextColor");
+            if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
         } else if (json.has("textColor")) {
-            String c = json.get("textColor").getAsString();
-            if (c != null && c.matches("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$")) themeTextColor = c;
+            String c = safeString(json, "textColor");
+            if (c != null && c.matches(HEX_PATTERN)) themeTextColor = c;
         }
         if (json.has("modules") && json.get("modules").isJsonObject()) {
             JsonObject mods = json.getAsJsonObject("modules");
             modules.clear();
             for (var entry : mods.entrySet()) {
-                ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
-                modules.put(entry.getKey(), cfg);
+                try {
+                    if (!entry.getValue().isJsonObject()) continue;
+                    JsonObject obj = entry.getValue().getAsJsonObject();
+                    ModuleConfig cfg = GSON.fromJson(entry.getValue(), ModuleConfig.class);
+                    if (cfg == null) cfg = new ModuleConfig();
+                    if (cfg.custom == null) cfg.custom = new LinkedHashMap<>();
+                    // Pull flattened custom keys back in (toJson flattens).
+                    // Same guards as updateModule: plain identifiers, strings
+                    // capped, no objects/arrays, finite numbers only.
+                    for (var f : obj.entrySet()) {
+                        String key = f.getKey();
+                        if ("custom".equals(key) || isKnownModuleKey(key)) continue;
+                        if (!key.matches("[A-Za-z][A-Za-z0-9_]{0,63}")) continue;
+                        var value = f.getValue();
+                        if (value != null && value.isJsonPrimitive()) {
+                            var primitive = value.getAsJsonPrimitive();
+                            if (primitive.isString() && primitive.getAsString().length() > 512) continue;
+                            if (primitive.isNumber()) {
+                                double number = primitive.getAsDouble();
+                                if (Double.isNaN(number) || Double.isInfinite(number)) continue;
+                            }
+                            cfg.custom.put(key, value.deepCopy());
+                        }
+                    }
+                    modules.put(entry.getKey(), cfg);
+                } catch (Exception ignored) {}
             }
         }
-        ensureDefaults(false);
+        // Missing modules are seeded from definitions by the caller's
+        // post-import applyOptionDefaults (see NetworkPackets onImport hook).
         fillMissingDefaults();
-        this.root = json;
+        this.root = json.deepCopy();
         save();
     }
 

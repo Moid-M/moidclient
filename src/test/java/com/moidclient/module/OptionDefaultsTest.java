@@ -63,6 +63,21 @@ public class OptionDefaultsTest {
         assertEquals(3.0, config.getModule("fakeFutureMod").optDouble("vol", 0), 0.0001);
     }
 
+        @Test
+    public void defaultEnabledSeedsShipOnModules() throws Exception {
+        File dir = Files.createTempDirectory("moidclient-test").toFile();
+        ConfigManager config = new ConfigManager(new File(dir, "moidclient.json"));
+        ModuleRegistry.applyOptionDefaults(config);
+
+        // telemetryBlock + statistics ship ON via their definitions; a plain
+        // HUD ships OFF. Seeding never touches existing choices (covered by
+        // userValuesAreNeverOverwritten for options; enabled behaves the same
+        // since only missing modules are created).
+        assertTrue(config.getModule("telemetryBlock").enabled);
+        assertTrue(config.getModule("statistics").enabled);
+        assertFalse(config.getModule("ping").enabled);
+    }
+
     @Test
     public void knownKeysAreSkipped() throws Exception {
         File dir = Files.createTempDirectory("moidclient-test").toFile();

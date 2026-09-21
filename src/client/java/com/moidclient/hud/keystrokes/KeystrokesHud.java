@@ -24,6 +24,7 @@ public final class KeystrokesHud {
     public static int[] measure(ConfigManager.ModuleConfig mod) {
         int gap = Math.max(0, Math.min(10, mod.keystrokesGap));
         int keySize = 18;
+        int mouseWidth = 28;
         int estH = 0;
         if (mod.keystrokesShowW) estH += keySize + gap;
         if (mod.keystrokesShowA || mod.keystrokesShowS || mod.keystrokesShowD) estH += keySize + gap;
@@ -31,7 +32,10 @@ public final class KeystrokesHud {
         if (mod.keystrokesShowSpace) estH += (keySize - 4) + gap;
         if (mod.keystrokesShowShift) estH += (keySize - 6) + gap;
         if (estH == 0) estH = keySize;
-        return new int[]{3 * keySize + 2 * gap, estH};
+        // Mouse row is two mouseWidth boxes + gap; keys/space rows are 3 keys wide.
+        int estW = 3 * keySize + 2 * gap;
+        if (mod.keystrokesShowMouse) estW = Math.max(estW, 2 * mouseWidth + gap);
+        return new int[]{estW, estH};
     }
 
     public static ModulePreview preview(ConfigManager config, LiveStats stats) {
@@ -130,8 +134,8 @@ public final class KeystrokesHud {
         int spaceWidth = keySize * 3 + gap * 2;
         int mouseWidth = 28;
 
-        Minecraft mc2 = Minecraft.getInstance();
-        var font = mc2.font;
+        if (mc.font == null) return;
+        var font = mc.font;
 
         Matrix3x2fStack pose = graphics.pose();
         pose.pushMatrix();
@@ -154,9 +158,7 @@ public final class KeystrokesHud {
                 if (showD) drawKey(graphics, font, "D", (keySize + gap) * 2, curY, keySize, keySize, dDown, bgEnabled, bgColor, bgOpacity, textColor, pressedHex, opacity, shadow, outline);
                 curY += keySize + gap;
             }
-            // Row 3: mouse if enabled (handle per-key L/R via showMouse + individual)
-            boolean showL = showMouse && mod.keystrokesShowMouse; // keep legacy, but also check individual
-            // for per-key, use showMouse as overall, but also allow disabling individual via showA etc. For mouse, use showMouse
+            // Row 3: mouse if enabled
             if (showMouse) {
                 String leftLabel = showCps ? "L " + com.moidclient.hud.cps.CpsHud.getLeftCps() : "L";
                 String rightLabel = showCps ? "R " + com.moidclient.hud.cps.CpsHud.getRightCps() : "R";
@@ -186,15 +188,21 @@ public final class KeystrokesHud {
         int bg = 0;
         int textCol;
         if (pressed) {
-            // pressed uses pressedHex with full opacity
-            try { textCol = ColorUtil.parseHex(pressedHex, opacity); } catch (Exception e) { textCol = ColorUtil.parseHex("#FFFFFF", opacity); }
+            // pressed bg uses pressedHex; text contrasts against it (white)
+            // so the label stays readable on the highlight.
             if (bgEnabled) {
                 try { bg = ColorUtil.parseHex(pressedHex, bgOpacity); } catch (Exception e) { bg = ColorUtil.parseHex("#FFFFFF", bgOpacity); }
                 // slightly dim bg for pressed
                 bg = (bg & 0x00FFFFFF) | ((int)(bgOpacity * 255) << 24);
                 g.fill(x, y, x + w, y + h, bg);
+                if (textColor != null && !textColor.isEmpty()) {
+                    try { textCol = ColorUtil.parseHex(textColor, opacity); } catch (Exception e) { textCol = ColorUtil.parseHex("#FFFFFF", opacity); }
+                } else {
+                    textCol = ColorUtil.parseHex("#FFFFFF", opacity);
+                }
             } else {
                 // no bg, just text color change
+                try { textCol = ColorUtil.parseHex(pressedHex, opacity); } catch (Exception e) { textCol = ColorUtil.parseHex("#FFFFFF", opacity); }
             }
         } else {
             if (bgEnabled) {
@@ -222,6 +230,4 @@ public final class KeystrokesHud {
             g.fill(x + w - 1, y, x + w, y + h, border);
         }
     }
-
-    // parseColor -> ColorUtil.parseHex
 }

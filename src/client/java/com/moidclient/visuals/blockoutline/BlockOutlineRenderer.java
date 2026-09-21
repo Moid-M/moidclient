@@ -205,7 +205,7 @@ public final class BlockOutlineRenderer {
                     poseStack.pushPose();
                     try {
                         poseStack.translate(ox, oy, oz);
-                        context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(), (pose, consumer) ->
+                        context.submitNodeCollector().submitCustomGeometry(poseStack, a >= 0.99f ? RenderTypes.lines() : RenderTypes.linesTranslucent(), (pose, consumer) ->
                             drawEdges(state.shape(), pose, consumer,
                                     r, g, b, a, fr2, fg2, fb2, minY, height, useFade, flowPhase,
                                     width, faceDir, shapeBounds)

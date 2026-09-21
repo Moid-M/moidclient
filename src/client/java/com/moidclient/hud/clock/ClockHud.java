@@ -47,10 +47,10 @@ public final class ClockHud {
     public static int currentDay() {
         try {
             var level = Minecraft.getInstance().level;
-            if (level == null) return 0;
-            return (int) (level.getLevelData().getGameTime() / 24000L);
+            if (level == null) return 1;
+            return (int) (level.getLevelData().getGameTime() / 24000L) + 1;
         } catch (Exception e) {
-            return 0;
+            return 1;
         }
     }
 
@@ -92,6 +92,7 @@ public final class ClockHud {
         int y = mod.y;
         double scale = mod.scale <= 0 ? 1.0 : mod.scale;
 
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -102,7 +103,9 @@ public final class ClockHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, textW + 3, textH + 3, bg);
             }
             graphics.text(font, text, 0, 0, color, mod.shadow);

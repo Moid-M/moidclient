@@ -44,10 +44,39 @@ public class ConfigManagerTest {
         assertTrue(reloaded.getModule("futureModule").custom.get("myToggle").getAsBoolean());
         assertEquals("hello", reloaded.getModule("futureModule").custom.get("myText").getAsString());
 
-        // And appears in the dashboard JSON
+        // And appears flat in the dashboard JSON (custom merged top-level)
         JsonObject sync = reloaded.toJson();
         JsonObject mod = sync.getAsJsonObject("modules").getAsJsonObject("futureModule");
-        assertEquals("hello", mod.getAsJsonObject("custom").get("myText").getAsString());
+        assertEquals("hello", mod.get("myText").getAsString());
+        assertEquals(2.5, mod.get("mySlider").getAsDouble(), 0.0001);
+        assertTrue(mod.get("myToggle").getAsBoolean());
+        assertFalse(mod.has("custom"));
+    }
+
+    @Test
+    public void explicitFieldsWinOverStaleCustomDupes() throws Exception {
+        ConfigManager config = freshManager();
+        // Modules are seeded from definitions (no hardcoded ids here), so
+        // create it the same way a dashboard patch would.
+        JsonObject patch = new JsonObject();
+        patch.addProperty("zoomLevel", 4.0);
+        config.updateModule("zoom", patch);
+        config.getModule("zoom").custom.put("zoomLevel", new com.google.gson.JsonPrimitive(999.0));
+        JsonObject mod = config.toJson().getAsJsonObject("modules").getAsJsonObject("zoom");
+        assertEquals(config.getModule("zoom").zoomLevel, mod.get("zoomLevel").getAsDouble(), 0.0001);
+    }
+
+    @Test
+    public void flattenedExportReimports() throws Exception {
+        ConfigManager config = freshManager();
+        JsonObject patch = new JsonObject();
+        patch.addProperty("myToggle", true);
+        config.updateModule("futureModule", patch);
+        JsonObject exported = config.toJson();
+
+        ConfigManager config2 = freshManager();
+        config2.importFromJson(exported);
+        assertTrue(config2.getModule("futureModule").custom.get("myToggle").getAsBoolean());
     }
 
     @Test

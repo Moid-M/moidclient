@@ -33,8 +33,13 @@ public final class ServerHud {
 
     public static String currentAddress() {
         try {
-            var server = Minecraft.getInstance().getCurrentServer();
+            var mc = Minecraft.getInstance();
+            var server = mc.getCurrentServer();
             if (server != null && server.ip != null && !server.ip.isEmpty()) return server.ip;
+            var singleplayer = mc.getSingleplayerServer();
+            if (singleplayer != null) return singleplayer.isPublished() ? "LAN World" : "Singleplayer";
+            // Connected but neither a listed server nor integrated -> Realms.
+            if (mc.getConnection() != null) return "Realms";
         } catch (Exception ignored) {}
         return "Singleplayer";
     }
@@ -78,6 +83,7 @@ public final class ServerHud {
         int y = mod.y;
         double scale = mod.scale <= 0 ? 1.0 : mod.scale;
 
+        if (mc == null || mc.font == null) return;
         var font = mc.font;
         int textW = font.width(text);
         int textH = 9;
@@ -88,7 +94,9 @@ public final class ServerHud {
             pose.translate(x, y);
             pose.scale((float) scale, (float) scale);
             if (mod.background) {
-                int bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity);
+                int bg;
+                try { bg = ColorUtil.parseHex(mod.backgroundColor != null ? mod.backgroundColor : "#1A1B20", mod.backgroundOpacity); }
+                catch (Exception e) { bg = ColorUtil.withOpacity(0x1A1B20, mod.backgroundOpacity); }
                 graphics.fill(-3, -3, textW + 3, textH + 3, bg);
             }
             graphics.text(font, text, 0, 0, color, mod.shadow);
